@@ -1,0 +1,243 @@
+:root {
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  color: var(--el-text-color-primary);
+  background-color: var(--el-bg-color-page);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  min-width: 320px;
+  background: var(--el-bg-color-page);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--el-fill-color-lighter);
+}
+
+.login-card {
+  width: min(100%, 440px);
+}
+
+.login-card__header h1 {
+  margin: 8px 0;
+  font-size: 28px;
+}
+
+.login-card__tag,
+.app-header__tag {
+  color: var(--el-color-primary);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.login-card__header p {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+}
+
+.login-card__alert {
+  margin-bottom: 16px;
+}
+
+.login-card__button {
+  width: 100%;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-aside {
+  border-right: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+  display: flex;
+  flex-direction: column;
+}
+
+.app-brand {
+  padding: 20px;
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.app-brand__title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.app-brand__sub,
+.app-user__meta {
+  margin-top: 4px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.app-menu {
+  border-right: 0;
+  flex: 1;
+}
+
+.app-aside__footer {
+  padding: 16px 20px 20px;
+  border-top: 1px solid var(--el-border-color-light);
+  display: grid;
+  gap: 8px;
+}
+
+.app-user__name {
+  font-weight: 600;
+}
+
+.app-header {
+  height: auto;
+  padding: 20px 24px 0;
+  background: var(--el-bg-color-page);
+}
+
+.app-header h2 {
+  margin: 6px 0 0;
+  font-size: 24px;
+}
+
+.app-main {
+  padding: 24px;
+}
+
+.dashboard-grid,
+.templates-grid,
+.panel-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.dashboard-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.templates-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metric-card,
+.panel-card {
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.metric-card span,
+.list-card span,
+.content__eyebrow {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.metric-card strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 30px;
+}
+
+.panel-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.panel-card h3 {
+  margin: 6px 0 0;
+  font-size: 22px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.button-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.list-stack {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.list-card {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--el-fill-color-blank);
+}
+
+.list-card p,
+.preview-card p {
+  margin: 0;
+  color: var(--el-text-color-regular);
+}
+
+.list-card--interactive {
+  cursor: pointer;
+}
+
+.preview-card {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  background: var(--el-fill-color-light);
+}
+
+.preview-card__html,
+.preview-card__code {
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
+  word-break: break-all;
+}
+
+.upload-copy {
+  text-align: center;
+  color: var(--el-text-color-secondary);
+}
+
+@media (max-width: 960px) {
+  .dashboard-grid,
+  .templates-grid,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

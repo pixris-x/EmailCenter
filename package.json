@@ -1,0 +1,15 @@
+{
+  "name": "email-center",
+  "private": true,
+  "packageManager": "pnpm@10.27.0",
+  "scripts": {
+    "dev:backend": "pnpm --dir backend dev",
+    "dev:frontend": "pnpm --dir frontend dev",
+    "start:backend": "pnpm --dir backend start",
+    "build:frontend": "pnpm --dir frontend build",
+    "db:migrate": "pnpm --dir backend db:migrate",
+    "worker:email": "pnpm --dir backend worker:email",
+    "redis:ping": "pnpm --dir backend redis:ping",
+    "queue:test": "pnpm --dir backend queue:test"
+  }
+}

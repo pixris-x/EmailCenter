@@ -1,0 +1,38 @@
+﻿# dependencies
+node_modules/
+
+
+# build outputs
+dist/
+build/
+.vite/
+.pnpm-store/
+
+# environment
+.env
+.env.*
+!.env.example
+
+# logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# runtime
+.cache/
+.temp/
+tmp/
+
+# editor / system
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# local uploads and generated files
+uploads/
+coverage/
+

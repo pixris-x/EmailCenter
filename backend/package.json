@@ -1,0 +1,35 @@
+{
+  "name": "email-center-backend",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.27.0",
+  "description": "Backend service for Email Center.",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "db:migrate": "node scripts/migrate.js",
+    "worker:email": "node src/workers/email-worker.js",
+    "redis:ping": "node scripts/redis-ping.js",
+    "queue:test": "node scripts/enqueue-test-job.js",
+    "admin:hash": "node scripts/generate-password-hash.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/multipart": "^9.4.0",
+    "bcryptjs": "^3.0.3",
+    "bullmq": "^5.71.1",
+    "dotenv": "^17.2.3",
+    "fastify": "^5.6.1",
+    "ioredis": "^5.10.1",
+    "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^8.0.4",
+    "pg": "^8.16.3",
+    "pg-hstore": "^2.3.4",
+    "sequelize": "^6.37.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10",
+    "pino-pretty": "^13.1.2"
+  }
+}
