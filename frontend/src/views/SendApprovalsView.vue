@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="panel-stack templates-grid">
     <section class="panel-card" v-loading="senderPanelLoading">
       <div class="panel-card__header">
@@ -215,23 +215,32 @@
       <div v-loading="senderDetailLoading" class="sender-drawer-body">
         <template v-if="selectedSenderDetail">
           <div class="preview-card sender-detail-card">
-            <strong>{{ selectedSenderDetail.name }}</strong>
+            <el-form label-position="top" @submit.prevent="updateSenderName">
+              <el-form-item label="发件人名称">
+                <el-input
+                  v-model="senderDetailForm.name"
+                  placeholder="请输入发件人名称"
+                  :disabled="senderUpdating"
+                />
+              </el-form-item>
+              <div class="button-row sender-detail-actions">
+                <el-button type="primary" @click="updateSenderName" :loading="senderUpdating">保存名称</el-button>
+                <el-button
+                  type="danger"
+                  plain
+                  @click="removeSender(selectedSenderDetail)"
+                  :loading="senderDeleting"
+                  :disabled="Number(selectedSenderDetail.usageCount || 0) > 0 || senderUpdating"
+                >
+                  删除发件人
+                </el-button>
+              </div>
+            </el-form>
             <p>发件邮箱：{{ selectedSenderDetail.email }}</p>
             <p>回复邮箱：{{ selectedSenderDetail.replyToEmail || '未设置' }}</p>
             <p>状态：{{ selectedSenderDetail.status === 'active' ? '启用中' : selectedSenderDetail.status }}</p>
             <p>引用次数：{{ selectedSenderDetail.usageCount || 0 }}</p>
             <p>创建时间：{{ formatDateTime(selectedSenderDetail.createdAt) }}</p>
-            <div class="button-row sender-detail-actions">
-              <el-button
-                type="danger"
-                plain
-                @click="removeSender(selectedSenderDetail)"
-                :loading="senderDeleting"
-                :disabled="Number(selectedSenderDetail.usageCount || 0) > 0"
-              >
-                删除发件人
-              </el-button>
-            </div>
           </div>
 
           <div class="list-stack" v-if="selectedSenderDetail.recentSendRequests?.length">
@@ -258,6 +267,7 @@ const senderPanelLoading = ref(false)
 const senderDetailLoading = ref(false)
 const senderSubmitting = ref(false)
 const senderDeleting = ref(false)
+const senderUpdating = ref(false)
 const mainDataLoading = ref(false)
 const requestSubmitting = ref(false)
 const requestDetailLoading = ref(false)
@@ -278,6 +288,9 @@ const attachments = ref([])
 const selectedSenderId = ref('')
 const selectedSenderDetail = ref(null)
 const senderDrawerVisible = ref(false)
+const senderDetailForm = reactive({
+  name: '',
+})
 const senderPagination = reactive({
   page: 1,
   pageSize: 5,
@@ -383,11 +396,16 @@ async function loadApprovedTemplates() {
   templates.value = data.items || []
 }
 
+function syncSenderDetailForm() {
+  senderDetailForm.name = selectedSenderDetail.value?.name || ''
+}
+
 async function fetchSenderDetail(senderId) {
   senderDetailLoading.value = true
   try {
     const { data } = await api.get(`/sender-identities/${senderId}`)
     selectedSenderDetail.value = data.sender
+    syncSenderDetailForm()
   } finally {
     senderDetailLoading.value = false
   }
@@ -501,6 +519,25 @@ async function createSender() {
 
 async function handleSenderPageChange(page) {
   await loadSenderData(page)
+}
+
+async function updateSenderName() {
+  if (!selectedSenderDetail.value) {
+    return
+  }
+
+  senderUpdating.value = true
+  try {
+    await api.put(`/sender-identities/${selectedSenderDetail.value.id}`, {
+      name: senderDetailForm.name,
+    })
+    await loadSenderData(senderPagination.page)
+    ElMessage.success('发件人名称已更新。')
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || error.message)
+  } finally {
+    senderUpdating.value = false
+  }
 }
 
 async function removeSender(sender) {
@@ -650,3 +687,4 @@ async function reviewRequest(action) {
 
 onMounted(loadData)
 </script>
+

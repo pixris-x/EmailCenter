@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="panel-stack templates-grid access-control-grid">
     <section class="panel-card" v-loading="rolesLoading || catalogLoading">
       <div class="panel-card__header">
@@ -78,6 +78,38 @@
       </div>
     </section>
 
+    <section class="panel-card access-security-panel" v-loading="passwordSubmitting">
+      <div class="panel-card__header">
+        <div>
+          <p class="content__eyebrow">账号安全</p>
+          <h3>修改当前登录密码</h3>
+        </div>
+      </div>
+
+      <div class="preview-card access-security-card">
+        <strong>{{ authStore.user.displayName || '当前管理员' }}</strong>
+        <p>登录邮箱：{{ authStore.user.email || '未登录' }}</p>
+        <p>角色：{{ authStore.user.roleName || authStore.user.roleCode || '未知角色' }}</p>
+      </div>
+
+      <el-form label-position="top" @submit.prevent="changeOwnPassword">
+        <div class="form-grid">
+          <el-form-item label="当前密码">
+            <el-input v-model="passwordForm.currentPassword" type="password" show-password placeholder="请输入当前登录密码" />
+          </el-form-item>
+          <el-form-item label="新密码">
+            <el-input v-model="passwordForm.newPassword" type="password" show-password placeholder="请输入新密码，至少 6 位" />
+          </el-form-item>
+        </div>
+        <el-form-item label="确认新密码">
+          <el-input v-model="passwordForm.confirmPassword" type="password" show-password placeholder="请再次输入新密码" />
+        </el-form-item>
+        <div class="button-row">
+          <el-button type="primary" @click="changeOwnPassword" :loading="passwordSubmitting">更新登录密码</el-button>
+        </div>
+      </el-form>
+    </section>
+
     <el-drawer v-model="roleDrawerVisible" title="角色权限" size="460px" :destroy-on-close="false">
       <div v-loading="roleSubmitting" class="sender-drawer-body">
         <el-form label-position="top" @submit.prevent="submitRole">
@@ -151,6 +183,14 @@
             <el-input v-model="userForm.password" type="password" show-password placeholder="请输入登录密码" />
           </el-form-item>
 
+          <el-alert
+            v-if="userForm.id"
+            title="超级管理员可以在这里直接重置任意管理员密码；当前登录账号也可以在下方“账号安全”区域修改自己的密码。"
+            type="info"
+            show-icon
+            :closable="false"
+          />
+
           <div class="button-row">
             <el-button type="primary" @click="submitAdminUser" :loading="userSubmitting">
               {{ userForm.id ? '保存账号' : '创建账号' }}
@@ -166,12 +206,15 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '../lib/api'
+import { useAuthStore } from '../stores/auth'
 
+const authStore = useAuthStore()
 const catalogLoading = ref(false)
 const rolesLoading = ref(false)
 const roleSubmitting = ref(false)
 const usersLoading = ref(false)
 const userSubmitting = ref(false)
+const passwordSubmitting = ref(false)
 const roleDrawerVisible = ref(false)
 const userDrawerVisible = ref(false)
 const selectedRoleId = ref('')
@@ -210,6 +253,12 @@ const userForm = reactive({
   password: '',
 })
 
+const passwordForm = reactive({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+})
+
 function resetRoleForm() {
   roleForm.id = ''
   roleForm.roleCode = ''
@@ -225,6 +274,12 @@ function resetUserForm() {
   userForm.roleCode = ''
   userForm.status = 'active'
   userForm.password = ''
+}
+
+function resetPasswordForm() {
+  passwordForm.currentPassword = ''
+  passwordForm.newPassword = ''
+  passwordForm.confirmPassword = ''
 }
 
 function applyRole(role) {
@@ -349,6 +404,8 @@ async function submitRole() {
     await loadRoles(roleForm.id ? rolePagination.page : 1)
     roleDrawerVisible.value = false
     ElMessage.success(roleForm.id ? '角色已更新。' : '角色已创建。')
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || error.message)
   } finally {
     roleSubmitting.value = false
   }
@@ -377,8 +434,41 @@ async function submitAdminUser() {
     await loadAdminUsers(userForm.id ? userPagination.page : 1)
     userDrawerVisible.value = false
     ElMessage.success(userForm.id ? '管理员账号已更新。' : '管理员账号已创建。')
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || error.message)
   } finally {
     userSubmitting.value = false
+  }
+}
+
+async function changeOwnPassword() {
+  if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+    ElMessage.error('请完整填写改密信息。')
+    return
+  }
+
+  if (passwordForm.newPassword.length < 6) {
+    ElMessage.error('新密码长度不能少于 6 位。')
+    return
+  }
+
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    ElMessage.error('两次输入的新密码不一致。')
+    return
+  }
+
+  passwordSubmitting.value = true
+  try {
+    const { data } = await api.post('/auth/change-password', {
+      currentPassword: passwordForm.currentPassword,
+      newPassword: passwordForm.newPassword,
+    })
+    resetPasswordForm()
+    ElMessage.success(data.message || '登录密码已更新。')
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || error.message)
+  } finally {
+    passwordSubmitting.value = false
   }
 }
 

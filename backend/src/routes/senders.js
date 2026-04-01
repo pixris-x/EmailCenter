@@ -158,6 +158,38 @@ async function senderRoutes(app) {
     return reply.status(201).send(serializeSenderIdentity(item, { usageCount: 0 }));
   });
 
+  app.put('/sender-identities/:id', async (request, reply) => {
+    const { SenderIdentity } = getModels();
+    const item = await SenderIdentity.findByPk(request.params.id);
+
+    if (!item) {
+      return reply.status(404).send({ message: '\u53d1\u4ef6\u4eba\u4e0d\u5b58\u5728\u3002' });
+    }
+
+    const nextName = String(request.body?.name || '').trim();
+    if (!nextName) {
+      return reply.status(400).send({ message: '\u53d1\u4ef6\u4eba\u540d\u79f0\u4e0d\u80fd\u4e3a\u7a7a\u3002' });
+    }
+
+    item.name = nextName;
+    await item.save();
+
+    await recordAuditLog({
+      ...getAdminAuditMeta(request),
+      eventType: 'sender_identity_updated',
+      resourceType: 'sender_identity',
+      resourceId: item.id,
+      status: 'success',
+      message: `发件人 ${item.email} 更新成功。`,
+      metadata: {
+        senderEmail: item.email,
+        senderName: item.name,
+      },
+    });
+
+    return reply.send(serializeSenderIdentity(item));
+  });
+
   app.delete('/sender-identities/:id', async (request, reply) => {
     const { SenderIdentity, SendRequest } = getModels();
     const item = await SenderIdentity.findByPk(request.params.id);
@@ -201,3 +233,5 @@ async function senderRoutes(app) {
 }
 
 module.exports = { senderRoutes };
+
+
