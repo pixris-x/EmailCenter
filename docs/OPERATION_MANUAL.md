@@ -101,6 +101,10 @@ RESEND_SMTP_USER=resend
 RESEND_SMTP_PASS=
 MAIL_DEFAULT_FROM_NAME=Pixris
 MAIL_DEFAULT_FROM_EMAIL=noreply@email.pixris.online
+
+ADMIN_BOOTSTRAP_EMAIL=
+ADMIN_BOOTSTRAP_NAME=
+ADMIN_BOOTSTRAP_PASSWORD=
 ```
 
 注意：
@@ -114,28 +118,56 @@ MAIL_DEFAULT_FROM_EMAIL=noreply@email.pixris.online
 
 ```bash
 cd /www/wwwroot/email-center
-pnpm --dir backend db:migrate
+pnpm db:migrate
 ```
 
 ## 7. 创建管理员账号
 
-先生成密码哈希：
+### 7.1 推荐方式：通过 .env 一键创建
+
+先在 `.env` 中填写：
+
+```env
+ADMIN_BOOTSTRAP_EMAIL=admin@email.pixris.online
+ADMIN_BOOTSTRAP_NAME=系统管理员
+ADMIN_BOOTSTRAP_PASSWORD=MyStrongPassword123
+```
+
+然后在项目根目录直接执行：
 
 ```bash
 cd /www/wwwroot/email-center
-pnpm --dir backend admin:hash 你的管理员密码
+pnpm admin:create
 ```
 
-然后打开 SQL 文件：
+### 7.2 命令行直接传参
 
-`docs/sql/create_admin_user.sql`
+如果你不想把管理员信息放在 `.env`，也可以直接传参：
 
-执行前替换以下内容：
-- 管理员邮箱
-- 管理员显示名
-- `password_hash`
+```bash
+pnpm admin:create 管理员邮箱 显示名称 管理员密码
+```
 
-执行完成后即可使用该管理员登录后台。
+示例：
+
+```bash
+pnpm admin:create admin@email.pixris.online 系统管理员 MyStrongPassword123
+```
+
+脚本会自动完成：
+- 创建或更新 `super_admin` 角色
+- 创建管理员账号
+- 自动生成并写入 bcrypt 密码哈希
+- 如果邮箱已存在，则自动更新密码和显示名称
+
+### 7.3 备用方式：手动生成哈希
+
+```bash
+cd /www/wwwroot/email-center
+pnpm admin:hash 你的管理员密码
+```
+
+如果你确实需要手动执行 SQL，也可以把生成的哈希填入 `docs/sql/create_admin_user.sql` 后再执行。
 
 ## 8. 启动服务
 
@@ -157,7 +189,7 @@ pm2 start backend/src/workers/email-worker.js --name email-center-worker
 
 ```bash
 cd /www/wwwroot/email-center
-pnpm --dir frontend build
+pnpm build:frontend
 ```
 
 构建产物默认在：
@@ -185,7 +217,7 @@ http://127.0.0.1:3000
 如果你希望前后端同域部署，前端的 `VITE_API_BASE_URL` 建议配置为：
 
 ```env
-VITE_API_BASE_URL=https://email.pixris.online
+VITE_API_BASE_URL=/api
 ```
 
 ## 10. HTTPS 配置
@@ -306,8 +338,9 @@ pm2 startup
 
 检查项：
 - 管理员邮箱是否正确
-- 密码哈希是否已正确写入数据库
+- 管理员脚本是否执行成功
 - `APP_JWT_SECRET` 是否已配置
+- `.env` 中的管理员初始化信息是否填写正确
 
 ### 14.2 附件下载失败
 
@@ -323,4 +356,9 @@ pm2 startup
 - Worker 进程是否运行
 - Resend SMTP 凭据是否有效
 - SMTP 端口是否仍为 `465`
+
+
+开发环境说明：
+- 本地运行 pnpm dev:frontend 时，前端默认通过 Vite 代理把 /api 请求转发到 VITE_API_PROXY_TARGET`r
+- 这样浏览器不会直接跨域访问后端，从而避免本地 CORS 报错
 

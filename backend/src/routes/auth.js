@@ -2,6 +2,7 @@ const { sequelize } = require('../config/database');
 const { initModels } = require('../models');
 const { verifyAdminPassword, signAdminAccessToken } = require('../services/auth-service');
 const { recordAuditLog } = require('../services/audit-log-service');
+const { serializeAdminUser } = require('../services/permission-service');
 
 function getModels() {
   return initModels(sequelize);
@@ -9,7 +10,7 @@ function getModels() {
 
 async function authRoutes(app) {
   app.post('/auth/login', async (request, reply) => {
-    const { AdminUser } = getModels();
+    const { AdminUser, RolePermission } = getModels();
     const { email, password } = request.body || {};
 
     if (!email || !password) {
@@ -18,6 +19,9 @@ async function authRoutes(app) {
 
     const adminUser = await AdminUser.findOne({
       where: { email },
+      include: [
+        { model: RolePermission, as: 'rolePermission' },
+      ],
     });
 
     if (!adminUser || adminUser.status !== 'active') {
@@ -49,6 +53,7 @@ async function authRoutes(app) {
 
     await adminUser.update({ lastLoginAt: new Date() });
     const accessToken = signAdminAccessToken(adminUser);
+    const user = serializeAdminUser(adminUser);
 
     await recordAuditLog({
       actorType: 'admin',
@@ -66,12 +71,7 @@ async function authRoutes(app) {
 
     return reply.send({
       accessToken,
-      user: {
-        id: adminUser.id,
-        email: adminUser.email,
-        displayName: adminUser.displayName,
-        roleCode: adminUser.roleCode,
-      },
+      user,
     });
   });
 

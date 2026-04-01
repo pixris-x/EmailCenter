@@ -1,4 +1,4 @@
-﻿const { sequelize } = require('../config/database');
+const { sequelize } = require('../config/database');
 const { initModels } = require('../models');
 const {
   createApiKeyRecord,
@@ -7,6 +7,7 @@ const {
   validateAllowedProjects,
 } = require('../services/api-key-service');
 const { recordAuditLog } = require('../services/audit-log-service');
+const { parsePagination, buildPaginatedResponse } = require('../services/pagination-service');
 
 function getModels() {
   return initModels(sequelize);
@@ -21,13 +22,21 @@ function getAdminAuditMeta(request) {
 }
 
 async function apiKeyRoutes(app) {
-  app.get('/api-keys', async () => {
+  app.get('/api-keys', async (request) => {
     const { ApiKey } = getModels();
-    const items = await ApiKey.findAll({
+    const pagination = parsePagination(request.query, { defaultPageSize: 8, maxPageSize: 50 });
+    const result = await ApiKey.findAndCountAll({
       order: [['created_at', 'DESC']],
+      limit: pagination.limit,
+      offset: pagination.offset,
     });
 
-    return items.map((item) => serializeApiKey(item));
+    return buildPaginatedResponse({
+      rows: result.rows.map((item) => serializeApiKey(item)),
+      count: result.count,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+    });
   });
 
   app.post('/api-keys', async (request, reply) => {

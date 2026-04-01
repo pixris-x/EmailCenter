@@ -1,8 +1,9 @@
-﻿const { sequelize } = require('../config/database');
+const { sequelize } = require('../config/database');
 const { initModels } = require('../models');
 const { enqueueEmailJob } = require('../queues/email-queue');
 const { createSendRequest, buildSendRequestIncludes } = require('../services/send-request-service');
 const { recordAuditLog } = require('../services/audit-log-service');
+const { parsePagination, buildPaginatedResponse } = require('../services/pagination-service');
 
 function getModels() {
   return initModels(sequelize);
@@ -17,20 +18,42 @@ function getAdminAuditMeta(request) {
 }
 
 async function sendRequestRoutes(app) {
-  app.get('/send-requests', async () => {
+  app.get('/send-requests', async (request) => {
     const models = getModels();
-    return models.SendRequest.findAll({
+    const pagination = parsePagination(request.query, { defaultPageSize: 10, maxPageSize: 50 });
+    const result = await models.SendRequest.findAndCountAll({
       include: buildSendRequestIncludes(models),
       order: [['created_at', 'DESC']],
+      distinct: true,
+      limit: pagination.limit,
+      offset: pagination.offset,
+    });
+
+    return buildPaginatedResponse({
+      rows: result.rows,
+      count: result.count,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
     });
   });
 
-  app.get('/send-requests/pending-approval', async () => {
+  app.get('/send-requests/pending-approval', async (request) => {
     const models = getModels();
-    return models.SendRequest.findAll({
+    const pagination = parsePagination(request.query, { defaultPageSize: 8, maxPageSize: 50 });
+    const result = await models.SendRequest.findAndCountAll({
       where: { approvalStatus: 'pending_approval' },
       include: buildSendRequestIncludes(models),
       order: [['created_at', 'ASC']],
+      distinct: true,
+      limit: pagination.limit,
+      offset: pagination.offset,
+    });
+
+    return buildPaginatedResponse({
+      rows: result.rows,
+      count: result.count,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
     });
   });
 

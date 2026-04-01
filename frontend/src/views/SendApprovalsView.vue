@@ -1,12 +1,12 @@
-﻿<template>
+<template>
   <div class="panel-stack templates-grid">
-    <section class="panel-card">
+    <section class="panel-card" v-loading="senderPanelLoading">
       <div class="panel-card__header">
         <div>
           <p class="content__eyebrow">发件人管理</p>
           <h3>维护发件人身份</h3>
         </div>
-        <el-button @click="loadData" :loading="loading">刷新</el-button>
+        <el-button @click="loadSenderData(senderPagination.page)" :loading="senderPanelLoading">刷新</el-button>
       </div>
 
       <el-form label-position="top" @submit.prevent="createSender">
@@ -24,16 +24,38 @@
         <el-button type="primary" @click="createSender" :loading="senderSubmitting">创建发件人</el-button>
       </el-form>
 
-      <div class="list-stack">
-        <article v-for="sender in senders" :key="sender.id" class="list-card">
-          <strong>{{ sender.name }}</strong>
-          <span>{{ sender.email }}</span>
-          <p>{{ sender.status === 'active' ? '启用中' : sender.status }}</p>
-        </article>
+      <div class="sender-admin-grid">
+        <div class="sender-list-wrap">
+          <div class="list-stack sender-list-stack">
+            <article
+              v-for="sender in senders"
+              :key="sender.id"
+              class="list-card list-card--interactive"
+              :class="{ 'list-card--selected': selectedSenderId === sender.id && senderDrawerVisible }"
+              @click="openSenderDrawer(sender.id)"
+            >
+              <strong>{{ sender.name }}</strong>
+              <span>{{ sender.email }}</span>
+              <p>{{ sender.status === 'active' ? '启用中' : sender.status }} · 已使用 {{ sender.usageCount || 0 }} 次</p>
+            </article>
+            <el-empty v-if="!senders.length && !senderPanelLoading" description="暂无发件人" />
+          </div>
+
+          <div class="sender-pagination" v-if="senderPagination.total > 0">
+            <el-pagination
+              layout="prev, pager, next"
+              :current-page="senderPagination.page"
+              :page-size="senderPagination.pageSize"
+              :total="senderPagination.total"
+              @current-change="handleSenderPageChange"
+          :hide-on-single-page="false"
+            />
+          </div>
+        </div>
       </div>
     </section>
 
-    <section class="panel-card">
+    <section class="panel-card" v-loading="mainDataLoading">
       <div class="panel-card__header">
         <div>
           <p class="content__eyebrow">发送申请</p>
@@ -50,7 +72,7 @@
           </el-form-item>
           <el-form-item label="发件人身份">
             <el-select v-model="requestForm.senderIdentityId" placeholder="请选择发件人">
-              <el-option v-for="sender in senders" :key="sender.id" :label="sender.email" :value="sender.id" />
+              <el-option v-for="sender in senderOptions" :key="sender.id" :label="sender.email" :value="sender.id" />
             </el-select>
           </el-form-item>
         </div>
@@ -67,7 +89,7 @@
       </el-form>
     </section>
 
-    <section class="panel-card">
+    <section class="panel-card" v-loading="mainDataLoading">
       <div class="panel-card__header">
         <div>
           <p class="content__eyebrow">审批队列</p>
@@ -81,11 +103,22 @@
           <span>{{ item.template?.name || '未知模板' }} · {{ approvalStatusLabelMap[item.approvalStatus] || item.approvalStatus }}</span>
           <p>{{ (item.toRecipients || []).join(', ') }}</p>
         </article>
-        <el-empty v-if="!requests.length" description="暂无待审批发送申请" />
+        <el-empty v-if="!requests.length && !mainDataLoading" description="暂无待审批发送申请" />
+      </div>
+
+      <div class="list-pagination" v-if="requestPagination.total > 0">
+        <el-pagination
+          layout="prev, pager, next"
+          :current-page="requestPagination.page"
+          :page-size="requestPagination.pageSize"
+          :total="requestPagination.total"
+          @current-change="handleRequestPageChange"
+          :hide-on-single-page="false"
+        />
       </div>
     </section>
 
-    <section class="panel-card" v-if="selectedRequest">
+    <section class="panel-card" v-if="selectedRequest" v-loading="requestDetailLoading || attachmentUploading">
       <div class="panel-card__header">
         <div>
           <p class="content__eyebrow">审批详情</p>
@@ -140,6 +173,7 @@
                 link
                 type="danger"
                 @click="removeAttachment(attachment)"
+                :loading="attachmentDeleteId === attachment.id"
                 :disabled="selectedRequest.approvalStatus !== 'pending_approval'"
               >
                 删除
@@ -170,29 +204,90 @@
         </article>
       </div>
     </section>
+
+    <el-drawer
+      v-model="senderDrawerVisible"
+      title="发件人详情"
+      size="420px"
+      :with-header="true"
+      :destroy-on-close="false"
+    >
+      <div v-loading="senderDetailLoading" class="sender-drawer-body">
+        <template v-if="selectedSenderDetail">
+          <div class="preview-card sender-detail-card">
+            <strong>{{ selectedSenderDetail.name }}</strong>
+            <p>发件邮箱：{{ selectedSenderDetail.email }}</p>
+            <p>回复邮箱：{{ selectedSenderDetail.replyToEmail || '未设置' }}</p>
+            <p>状态：{{ selectedSenderDetail.status === 'active' ? '启用中' : selectedSenderDetail.status }}</p>
+            <p>引用次数：{{ selectedSenderDetail.usageCount || 0 }}</p>
+            <p>创建时间：{{ formatDateTime(selectedSenderDetail.createdAt) }}</p>
+            <div class="button-row sender-detail-actions">
+              <el-button
+                type="danger"
+                plain
+                @click="removeSender(selectedSenderDetail)"
+                :loading="senderDeleting"
+                :disabled="Number(selectedSenderDetail.usageCount || 0) > 0"
+              >
+                删除发件人
+              </el-button>
+            </div>
+          </div>
+
+          <div class="list-stack" v-if="selectedSenderDetail.recentSendRequests?.length">
+            <article v-for="item in selectedSenderDetail.recentSendRequests" :key="item.id" class="list-card">
+              <strong>{{ item.requestNo }}</strong>
+              <span>{{ item.template?.name || '未知模板' }}</span>
+              <p>{{ approvalStatusLabelMap[item.approvalStatus] || item.approvalStatus }} / {{ deliveryStatusLabelMap[item.deliveryStatus] || item.deliveryStatus }}</p>
+            </article>
+          </div>
+          <el-empty v-else description="该发件人暂无最近发送记录" />
+        </template>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../lib/api'
 
 const loading = ref(false)
+const senderPanelLoading = ref(false)
+const senderDetailLoading = ref(false)
 const senderSubmitting = ref(false)
+const senderDeleting = ref(false)
+const mainDataLoading = ref(false)
 const requestSubmitting = ref(false)
+const requestDetailLoading = ref(false)
 const approvalSubmitting = ref(false)
 const attachmentUploading = ref(false)
+const attachmentDeleteId = ref('')
 const approvalMessage = ref('')
 const approvalType = ref('success')
 const approvalComment = ref('')
 
 const senders = ref([])
+const senderOptions = ref([])
 const templates = ref([])
 const requests = ref([])
 const selectedRequest = ref(null)
 const approvalLogs = ref([])
 const attachments = ref([])
+const selectedSenderId = ref('')
+const selectedSenderDetail = ref(null)
+const senderDrawerVisible = ref(false)
+const senderPagination = reactive({
+  page: 1,
+  pageSize: 5,
+  total: 0,
+})
+const requestPagination = reactive({
+  page: 1,
+  pageSize: 8,
+  total: 0,
+})
 
 const approvalStatusLabelMap = {
   pending_approval: '待审批',
@@ -243,8 +338,11 @@ function buildDownloadUrl(downloadPath) {
     return '#'
   }
 
-  const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000').replace(/\/$/, '')
-  return `${baseUrl}${downloadPath}`
+  const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+  const normalizedBaseUrl = rawBaseUrl === '/api'
+    ? ''
+    : rawBaseUrl.replace(/\/$/, '')
+  return `${normalizedBaseUrl}${downloadPath}`
 }
 
 function formatFileSize(size) {
@@ -261,17 +359,98 @@ function formatFileSize(size) {
   return `${(kb / 1024).toFixed(2)} MB`
 }
 
-async function loadData() {
-  loading.value = true
+function formatDateTime(value) {
+  if (!value) {
+    return '未知'
+  }
+
+  return new Date(value).toLocaleString('zh-CN', {
+    hour12: false,
+  })
+}
+
+async function loadSenderOptions() {
+  const { data } = await api.get('/sender-identities', {
+    params: { all: true },
+  })
+  senderOptions.value = data.items || []
+}
+
+async function loadApprovedTemplates() {
+  const { data } = await api.get('/templates', {
+    params: { all: true },
+  })
+  templates.value = data.items || []
+}
+
+async function fetchSenderDetail(senderId) {
+  senderDetailLoading.value = true
   try {
-    const [sendersResponse, templatesResponse, requestsResponse] = await Promise.all([
-      api.get('/sender-identities'),
-      api.get('/templates'),
-      api.get('/send-requests/pending-approval'),
+    const { data } = await api.get(`/sender-identities/${senderId}`)
+    selectedSenderDetail.value = data.sender
+  } finally {
+    senderDetailLoading.value = false
+  }
+}
+
+async function openSenderDrawer(senderId) {
+  selectedSenderId.value = senderId
+  senderDrawerVisible.value = true
+  await fetchSenderDetail(senderId)
+}
+
+async function loadSenderData(page = senderPagination.page) {
+  senderPanelLoading.value = true
+  try {
+    const { data } = await api.get('/sender-identities', {
+      params: {
+        page,
+        pageSize: senderPagination.pageSize,
+      },
+    })
+
+    senders.value = data.items || []
+    senderPagination.page = data.page || page
+    senderPagination.pageSize = data.pageSize || senderPagination.pageSize
+    senderPagination.total = data.total || 0
+
+    await loadSenderOptions()
+
+    if (senderDrawerVisible.value && selectedSenderId.value) {
+      const exists = senderOptions.value.find((item) => item.id === selectedSenderId.value)
+      if (exists) {
+        await fetchSenderDetail(selectedSenderId.value)
+      } else {
+        senderDrawerVisible.value = false
+        selectedSenderId.value = ''
+        selectedSenderDetail.value = null
+      }
+    }
+  } finally {
+    senderPanelLoading.value = false
+  }
+}
+
+async function loadRequestData(page = requestPagination.page) {
+  mainDataLoading.value = true
+  try {
+    const [templatesResponse, requestsResponse] = await Promise.all([
+      api.get('/templates', {
+        params: { all: true },
+      }),
+      api.get('/send-requests/pending-approval', {
+        params: {
+          page,
+          pageSize: requestPagination.pageSize,
+        },
+      }),
     ])
-    senders.value = sendersResponse.data
-    templates.value = templatesResponse.data
-    requests.value = requestsResponse.data
+
+    templates.value = templatesResponse.data.items || []
+    requests.value = requestsResponse.data.items || []
+    requestPagination.page = requestsResponse.data.page || page
+    requestPagination.pageSize = requestsResponse.data.pageSize || requestPagination.pageSize
+    requestPagination.total = requestsResponse.data.total || 0
 
     if (selectedRequest.value) {
       const refreshed = requests.value.find((item) => item.id === selectedRequest.value.id)
@@ -286,6 +465,18 @@ async function loadData() {
       await selectRequest(requests.value[0])
     }
   } finally {
+    mainDataLoading.value = false
+  }
+}
+
+async function loadData() {
+  loading.value = true
+  try {
+    await Promise.all([
+      loadSenderData(senderPagination.page),
+      loadRequestData(requestPagination.page),
+    ])
+  } finally {
     loading.value = false
   }
 }
@@ -298,11 +489,49 @@ async function loadAttachments(sendRequestId) {
 async function createSender() {
   senderSubmitting.value = true
   try {
-    await api.post('/sender-identities', senderForm)
-    await loadData()
+    const { data } = await api.post('/sender-identities', senderForm)
+    await loadSenderData(1)
+    requestForm.senderIdentityId = data.id
     ElMessage.success('发件人创建成功。')
+    await openSenderDrawer(data.id)
   } finally {
     senderSubmitting.value = false
+  }
+}
+
+async function handleSenderPageChange(page) {
+  await loadSenderData(page)
+}
+
+async function removeSender(sender) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除发件人 ${sender.email} 吗？`,
+      '删除确认',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+
+  senderDeleting.value = true
+  try {
+    await api.delete(`/sender-identities/${sender.id}`)
+    ElMessage.success('发件人删除成功。')
+    senderDrawerVisible.value = false
+    selectedSenderId.value = ''
+    selectedSenderDetail.value = null
+
+    const maxPage = Math.max(1, Math.ceil((Math.max(senderPagination.total - 1, 0)) / senderPagination.pageSize))
+    await loadSenderData(Math.min(senderPagination.page, maxPage))
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || error.message)
+  } finally {
+    senderDeleting.value = false
   }
 }
 
@@ -316,7 +545,7 @@ async function createSendRequest() {
       sourceProject: requestForm.sourceProject,
       templatePayload: parsePayload(),
     })
-    await loadData()
+    await loadRequestData(1)
     const createdItem = requests.value.find((item) => item.id === data.id)
     if (createdItem) {
       await selectRequest(createdItem)
@@ -329,11 +558,23 @@ async function createSendRequest() {
 
 async function selectRequest(item) {
   selectedRequest.value = item
-  const [logsResponse] = await Promise.all([
-    api.get(`/send-requests/${item.id}/approval-logs`),
-    loadAttachments(item.id),
-  ])
-  approvalLogs.value = logsResponse.data
+  requestDetailLoading.value = true
+  try {
+    const [logsResponse] = await Promise.all([
+      api.get(`/send-requests/${item.id}/approval-logs`),
+      loadAttachments(item.id),
+    ])
+    approvalLogs.value = logsResponse.data
+  } finally {
+    requestDetailLoading.value = false
+  }
+}
+
+async function handleRequestPageChange(page) {
+  selectedRequest.value = null
+  approvalLogs.value = []
+  attachments.value = []
+  await loadRequestData(page)
 }
 
 async function uploadAttachment(option) {
@@ -366,12 +607,17 @@ async function uploadAttachment(option) {
 }
 
 async function removeAttachment(attachment) {
-  await api.delete(`/attachments/${attachment.id}`)
-  if (selectedRequest.value) {
-    await loadAttachments(selectedRequest.value.id)
-    selectedRequest.value.attachments = attachments.value
+  attachmentDeleteId.value = attachment.id
+  try {
+    await api.delete(`/attachments/${attachment.id}`)
+    if (selectedRequest.value) {
+      await loadAttachments(selectedRequest.value.id)
+      selectedRequest.value.attachments = attachments.value
+    }
+    ElMessage.success('附件已删除。')
+  } finally {
+    attachmentDeleteId.value = ''
   }
-  ElMessage.success('附件已删除。')
 }
 
 async function reviewRequest(action) {
@@ -393,7 +639,7 @@ async function reviewRequest(action) {
     selectedRequest.value = null
     approvalLogs.value = []
     attachments.value = []
-    await loadData()
+    await loadRequestData(1)
   } catch (error) {
     approvalType.value = 'error'
     approvalMessage.value = error.response?.data?.message || error.message

@@ -1,7 +1,8 @@
-﻿const { sequelize } = require('../config/database');
+const { sequelize } = require('../config/database');
 const { initModels } = require('../models');
 const { renderTemplateContent } = require('../services/template-renderer');
 const { recordAuditLog } = require('../services/audit-log-service');
+const { parsePagination, buildPaginatedResponse, isAllQuery } = require('../services/pagination-service');
 
 function getModels() {
   return initModels(sequelize);
@@ -38,9 +39,29 @@ function normalizeVariablesSchema(rawVariables = '') {
 }
 
 async function templateRoutes(app) {
-  app.get('/template-categories', async () => {
+  app.get('/template-categories', async (request) => {
     const { TemplateCategory } = getModels();
-    return TemplateCategory.findAll({ order: [['created_at', 'DESC']] });
+    const order = [['created_at', 'DESC']];
+
+    if (isAllQuery(request.query)) {
+      return {
+        items: await TemplateCategory.findAll({ order }),
+      };
+    }
+
+    const pagination = parsePagination(request.query, { defaultPageSize: 8, maxPageSize: 50 });
+    const result = await TemplateCategory.findAndCountAll({
+      order,
+      limit: pagination.limit,
+      offset: pagination.offset,
+    });
+
+    return buildPaginatedResponse({
+      rows: result.rows,
+      count: result.count,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+    });
   });
 
   app.post('/template-categories', async (request, reply) => {
@@ -61,26 +82,57 @@ async function templateRoutes(app) {
     return reply.status(201).send(item);
   });
 
-  app.get('/templates', async () => {
+  app.get('/templates', async (request) => {
     const { EmailTemplate, TemplateCategory, TemplateReviewLog } = getModels();
-    return EmailTemplate.findAll({
-      include: [
-        { model: TemplateCategory, as: 'category' },
-        { model: TemplateReviewLog, as: 'reviewLogs', required: false },
-      ],
-      order: [['created_at', 'DESC']],
+    const order = [['created_at', 'DESC']];
+    const include = [
+      { model: TemplateCategory, as: 'category' },
+      { model: TemplateReviewLog, as: 'reviewLogs', required: false },
+    ];
+
+    if (isAllQuery(request.query)) {
+      return {
+        items: await EmailTemplate.findAll({ include, order }),
+      };
+    }
+
+    const pagination = parsePagination(request.query, { defaultPageSize: 8, maxPageSize: 50 });
+    const result = await EmailTemplate.findAndCountAll({
+      include,
+      order,
+      distinct: true,
+      limit: pagination.limit,
+      offset: pagination.offset,
+    });
+
+    return buildPaginatedResponse({
+      rows: result.rows,
+      count: result.count,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
     });
   });
 
-  app.get('/templates/review-queue', async () => {
+  app.get('/templates/review-queue', async (request) => {
     const { EmailTemplate, TemplateCategory, TemplateReviewLog } = getModels();
-    return EmailTemplate.findAll({
+    const pagination = parsePagination(request.query, { defaultPageSize: 8, maxPageSize: 50 });
+    const result = await EmailTemplate.findAndCountAll({
       where: { status: 'pending_review' },
       include: [
         { model: TemplateCategory, as: 'category' },
         { model: TemplateReviewLog, as: 'reviewLogs', required: false },
       ],
       order: [['updated_at', 'ASC']],
+      distinct: true,
+      limit: pagination.limit,
+      offset: pagination.offset,
+    });
+
+    return buildPaginatedResponse({
+      rows: result.rows,
+      count: result.count,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
     });
   });
 

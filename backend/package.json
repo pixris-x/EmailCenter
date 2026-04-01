@@ -12,7 +12,8 @@
     "worker:email": "node src/workers/email-worker.js",
     "redis:ping": "node scripts/redis-ping.js",
     "queue:test": "node scripts/enqueue-test-job.js",
-    "admin:hash": "node scripts/generate-password-hash.js"
+    "admin:hash": "node scripts/generate-password-hash.js",
+    "admin:create": "node scripts/create-admin-user.js"
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",

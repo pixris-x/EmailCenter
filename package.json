@@ -10,6 +10,8 @@
     "db:migrate": "pnpm --dir backend db:migrate",
     "worker:email": "pnpm --dir backend worker:email",
     "redis:ping": "pnpm --dir backend redis:ping",
-    "queue:test": "pnpm --dir backend queue:test"
+    "queue:test": "pnpm --dir backend queue:test",
+    "admin:hash": "pnpm --dir backend admin:hash",
+    "admin:create": "pnpm --dir backend admin:create"
   }
 }

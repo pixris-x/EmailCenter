@@ -1,6 +1,6 @@
-﻿<template>
+<template>
   <div class="panel-stack">
-    <section class="panel-card">
+    <section class="panel-card" v-loading="loading">
       <div class="panel-card__header">
         <div>
           <p class="content__eyebrow">审核队列</p>
@@ -15,11 +15,22 @@
           <span>{{ template.code }} · {{ statusLabelMap[template.status] || template.status }}</span>
           <p>{{ template.subject }}</p>
         </article>
-        <el-empty v-if="!templates.length" description="暂无待审核模板" />
+        <el-empty v-if="!templates.length && !loading" description="暂无待审核模板" />
+      </div>
+
+      <div class="list-pagination" v-if="pagination.total > pagination.pageSize">
+        <el-pagination
+          layout="prev, pager, next"
+          :current-page="pagination.page"
+          :page-size="pagination.pageSize"
+          :total="pagination.total"
+          @current-change="handlePageChange"
+          :hide-on-single-page="false"
+        />
       </div>
     </section>
 
-    <section class="panel-card" v-if="selectedTemplate">
+    <section class="panel-card" v-if="selectedTemplate" v-loading="reviewDetailLoading">
       <div class="panel-card__header">
         <div>
           <p class="content__eyebrow">审核详情</p>
@@ -51,7 +62,7 @@
       <div class="list-stack" v-if="reviewLogs.length">
         <article v-for="log in reviewLogs" :key="log.id" class="list-card">
           <strong>{{ actionLabelMap[log.action] || log.action }}</strong>
-          <span>{{ log.created_at || log.createdAt }}</span>
+          <span>{{ formatDateTime(log.created_at || log.createdAt) }}</span>
           <p>{{ log.comment || '暂无备注' }}</p>
         </article>
       </div>
@@ -60,17 +71,23 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import api from '../lib/api'
 
 const loading = ref(false)
 const reviewLoading = ref(false)
+const reviewDetailLoading = ref(false)
 const reviewMessage = ref('')
 const reviewType = ref('success')
 const reviewComment = ref('')
 const templates = ref([])
 const selectedTemplate = ref(null)
 const reviewLogs = ref([])
+const pagination = reactive({
+  page: 1,
+  pageSize: 8,
+  total: 0,
+})
 
 const statusLabelMap = {
   draft: '草稿',
@@ -85,17 +102,43 @@ const actionLabelMap = {
   reject: '审核驳回',
 }
 
-async function loadQueue() {
+function formatDateTime(value) {
+  if (!value) {
+    return '未知'
+  }
+
+  return new Date(value).toLocaleString('zh-CN', {
+    hour12: false,
+  })
+}
+
+async function loadQueue(page = pagination.page) {
   loading.value = true
   try {
-    const { data } = await api.get('/templates/review-queue')
-    templates.value = data
-    if (!selectedTemplate.value && data.length) {
-      await selectTemplate(data[0])
+    const { data } = await api.get('/templates/review-queue', {
+      params: {
+        page,
+        pageSize: pagination.pageSize,
+      },
+    })
+
+    templates.value = data.items || []
+    pagination.page = data.page || page
+    pagination.pageSize = data.pageSize || pagination.pageSize
+    pagination.total = data.total || 0
+
+    if (!selectedTemplate.value && templates.value.length) {
+      await selectTemplate(templates.value[0])
     }
-    if (!data.length) {
-      selectedTemplate.value = null
-      reviewLogs.value = []
+
+    if (selectedTemplate.value) {
+      const matched = templates.value.find((item) => item.id === selectedTemplate.value.id)
+      if (matched) {
+        selectedTemplate.value = matched
+      } else if (!templates.value.length) {
+        selectedTemplate.value = null
+        reviewLogs.value = []
+      }
     }
   } finally {
     loading.value = false
@@ -104,8 +147,13 @@ async function loadQueue() {
 
 async function selectTemplate(template) {
   selectedTemplate.value = template
-  const { data } = await api.get(`/templates/${template.id}/review-logs`)
-  reviewLogs.value = data
+  reviewDetailLoading.value = true
+  try {
+    const { data } = await api.get(`/templates/${template.id}/review-logs`)
+    reviewLogs.value = data
+  } finally {
+    reviewDetailLoading.value = false
+  }
 }
 
 async function submitReview(action) {
@@ -124,13 +172,21 @@ async function submitReview(action) {
     reviewType.value = 'success'
     reviewMessage.value = data.message
     reviewComment.value = ''
-    await loadQueue()
+    selectedTemplate.value = null
+    reviewLogs.value = []
+    await loadQueue(1)
   } catch (error) {
     reviewType.value = 'error'
     reviewMessage.value = error.response?.data?.message || error.message
   } finally {
     reviewLoading.value = false
   }
+}
+
+async function handlePageChange(page) {
+  selectedTemplate.value = null
+  reviewLogs.value = []
+  await loadQueue(page)
 }
 
 onMounted(loadQueue)

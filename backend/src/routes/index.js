@@ -9,6 +9,7 @@ const { attachmentRoutes } = require('./attachments');
 const { apiKeyRoutes } = require('./api-keys');
 const { internalApiRoutes } = require('./internal-api');
 const { logRoutes } = require('./logs');
+const { accessControlRoutes } = require('./access-control');
 
 function registerRoutes(app) {
   healthRoutes(app);
@@ -22,6 +23,7 @@ function registerRoutes(app) {
   apiKeyRoutes(app);
   internalApiRoutes(app);
   logRoutes(app);
+  accessControlRoutes(app);
 }
 
 module.exports = { registerRoutes };

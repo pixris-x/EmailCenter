@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="panel-stack templates-grid">
     <section class="panel-card">
       <div class="panel-card__header">
@@ -42,7 +42,7 @@
       </div>
     </section>
 
-    <section class="panel-card">
+    <section class="panel-card" v-loading="loading">
       <div class="panel-card__header">
         <div>
           <p class="content__eyebrow">已签发密钥</p>
@@ -59,7 +59,18 @@
           <p>过期时间：{{ item.expiresAt || '永不过期' }}</p>
           <el-button v-if="item.status === 'active'" type="danger" plain @click="revokeKey(item)">吊销</el-button>
         </article>
-        <el-empty v-if="!apiKeys.length" description="暂无接口密钥" />
+        <el-empty v-if="!apiKeys.length && !loading" description="暂无接口密钥" />
+      </div>
+
+      <div class="list-pagination" v-if="pagination.total > 0">
+        <el-pagination
+          layout="prev, pager, next"
+          :current-page="pagination.page"
+          :page-size="pagination.pageSize"
+          :total="pagination.total"
+          @current-change="handlePageChange"
+          :hide-on-single-page="false"
+        />
       </div>
     </section>
   </div>
@@ -74,6 +85,11 @@ const loading = ref(false)
 const submitting = ref(false)
 const apiKeys = ref([])
 const plainTextKey = ref('')
+const pagination = reactive({
+  page: 1,
+  pageSize: 8,
+  total: 0,
+})
 
 const form = reactive({
   name: '账单服务',
@@ -89,11 +105,19 @@ function parseCommaValues(value) {
     .filter(Boolean)
 }
 
-async function loadKeys() {
+async function loadKeys(page = pagination.page) {
   loading.value = true
   try {
-    const { data } = await api.get('/api-keys')
-    apiKeys.value = data
+    const { data } = await api.get('/api-keys', {
+      params: {
+        page,
+        pageSize: pagination.pageSize,
+      },
+    })
+    apiKeys.value = data.items || []
+    pagination.page = data.page || page
+    pagination.pageSize = data.pageSize || pagination.pageSize
+    pagination.total = data.total || 0
   } finally {
     loading.value = false
   }
@@ -109,7 +133,7 @@ async function createKey() {
       scopes: parseCommaValues(form.scopes),
     })
     plainTextKey.value = data.plainTextKey || ''
-    await loadKeys()
+    await loadKeys(1)
     ElMessage.success('接口密钥创建成功。')
   } finally {
     submitting.value = false
@@ -118,7 +142,8 @@ async function createKey() {
 
 async function revokeKey(item) {
   await api.post(`/api-keys/${item.id}/revoke`)
-  await loadKeys()
+  const maxPage = Math.max(1, Math.ceil((Math.max(pagination.total - 1, 0)) / pagination.pageSize))
+  await loadKeys(Math.min(pagination.page, maxPage))
   ElMessage.success('接口密钥已吊销。')
 }
 
@@ -129,6 +154,10 @@ async function copyKey() {
 
   await navigator.clipboard.writeText(plainTextKey.value)
   ElMessage.success('接口密钥已复制。')
+}
+
+async function handlePageChange(page) {
+  await loadKeys(page)
 }
 
 onMounted(loadKeys)

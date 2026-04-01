@@ -1,18 +1,10 @@
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/database');
 const { initModels } = require('../models');
+const { parsePagination, buildPaginatedResponse } = require('../services/pagination-service');
 
 function getModels() {
   return initModels(sequelize);
-}
-
-function toLimit(value, fallback = 50, maximum = 200) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return fallback;
-  }
-
-  return Math.min(parsed, maximum);
 }
 
 function serializeEmailJob(item) {
@@ -102,6 +94,7 @@ async function logRoutes(app) {
   app.get('/logs/email-jobs', async (request) => {
     const { EmailJob, SendRequest, EmailTemplate, SenderIdentity, EmailLog, ApiKey } = getModels();
     const where = {};
+    const pagination = parsePagination(request.query, { defaultPageSize: 8, maxPageSize: 50 });
 
     if (request.query?.status) {
       where.status = request.query.status;
@@ -111,7 +104,7 @@ async function logRoutes(app) {
       where.provider = request.query.provider;
     }
 
-    const items = await EmailJob.findAll({
+    const result = await EmailJob.findAndCountAll({
       where,
       include: [
         {
@@ -130,10 +123,17 @@ async function logRoutes(app) {
         },
       ],
       order: [['created_at', 'DESC']],
-      limit: toLimit(request.query?.limit, 30),
+      distinct: true,
+      limit: pagination.limit,
+      offset: pagination.offset,
     });
 
-    return items.map(serializeEmailJob);
+    return buildPaginatedResponse({
+      rows: result.rows.map(serializeEmailJob),
+      count: result.count,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+    });
   });
 
   app.get('/logs/email-jobs/:id', async (request, reply) => {
@@ -167,27 +167,41 @@ async function logRoutes(app) {
 
   app.get('/logs/reviews', async (request) => {
     const { TemplateReviewLog, SendApprovalLog } = getModels();
-    const limit = toLimit(request.query?.limit, 50);
+    const pagination = parsePagination(request.query, { defaultPageSize: 8, maxPageSize: 50 });
+    const [templateTotal, sendTotal] = await Promise.all([
+      TemplateReviewLog.count(),
+      SendApprovalLog.count(),
+    ]);
+    const total = templateTotal + sendTotal;
+    const fetchLimit = Math.min(total || pagination.pageSize, pagination.page * pagination.pageSize);
 
     const [templateLogs, sendLogs] = await Promise.all([
       TemplateReviewLog.findAll({
         order: [['created_at', 'DESC']],
-        limit,
+        limit: fetchLimit,
       }),
       SendApprovalLog.findAll({
         order: [['created_at', 'DESC']],
-        limit,
+        limit: fetchLimit,
       }),
     ]);
 
-    return [...templateLogs.map((item) => serializeReviewLog(item, 'template')), ...sendLogs.map((item) => serializeReviewLog(item, 'send_approval'))]
-      .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt))
-      .slice(0, limit);
+    const merged = [...templateLogs.map((item) => serializeReviewLog(item, 'template')), ...sendLogs.map((item) => serializeReviewLog(item, 'send_approval'))]
+      .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+
+    const startIndex = (pagination.page - 1) * pagination.pageSize;
+    return buildPaginatedResponse({
+      rows: merged.slice(startIndex, startIndex + pagination.pageSize),
+      count: total,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+    });
   });
 
   app.get('/logs/audit', async (request) => {
     const { AuditLog } = getModels();
     const where = {};
+    const pagination = parsePagination(request.query, { defaultPageSize: 8, maxPageSize: 50 });
 
     if (request.query?.eventType) {
       where.eventType = request.query.eventType;
@@ -212,10 +226,18 @@ async function logRoutes(app) {
       ];
     }
 
-    return AuditLog.findAll({
+    const result = await AuditLog.findAndCountAll({
       where,
       order: [['created_at', 'DESC']],
-      limit: toLimit(request.query?.limit, 50),
+      limit: pagination.limit,
+      offset: pagination.offset,
+    });
+
+    return buildPaginatedResponse({
+      rows: result.rows,
+      count: result.count,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
     });
   });
 }

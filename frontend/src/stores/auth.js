@@ -16,17 +16,27 @@ function readStoredUser() {
   }
 }
 
+function createEmptyUser() {
+  return {
+    displayName: '',
+    roleCode: '',
+    roleName: '',
+    email: '',
+    permissions: [],
+  }
+}
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: window.localStorage.getItem(TOKEN_STORAGE_KEY) || '',
-    user: readStoredUser() || {
-      displayName: '',
-      roleCode: '',
-      email: '',
-    },
+    user: readStoredUser() || createEmptyUser(),
   }),
   getters: {
     isLoggedIn: (state) => Boolean(state.token),
+    hasPermission: (state) => (permissionCode) => {
+      const permissions = state.user?.permissions || []
+      return permissions.includes('*') || permissions.includes(permissionCode)
+    },
   },
   actions: {
     async signIn(credentials) {
@@ -51,11 +61,7 @@ export const useAuthStore = defineStore('auth', {
     },
     signOut() {
       this.token = ''
-      this.user = {
-        displayName: '',
-        roleCode: '',
-        email: '',
-      }
+      this.user = createEmptyUser()
       window.localStorage.removeItem(TOKEN_STORAGE_KEY)
       window.localStorage.removeItem(USER_STORAGE_KEY)
     },

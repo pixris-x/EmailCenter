@@ -43,7 +43,7 @@ INSERT INTO admin_users (
 VALUES (
   '00000000-0000-0000-0000-000000000201',
   'admin@email.pixris.online',
-  '请替换为 bcrypt 哈希',
+  '$2b$10$f.3a2d7MwOeIrfhiwXBxAedptNVeXW5e645Jf.wrgoEPfJe7xO9y.',
   '系统管理员',
   'active',
   'super_admin',

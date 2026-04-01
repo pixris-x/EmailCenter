@@ -1,15 +1,10 @@
-<template>
+﻿<template>
   <div class="login-page">
-    <el-card class="login-card" shadow="hover">
-      <template #header>
-        <div class="login-card__header">
-          <div>
-            <div class="login-card__tag">Pixris 邮件中心</div>
-            <h1>管理员登录</h1>
-            <p>使用管理员邮箱和密码登录，统一管理模板、审批、日志和发信接口。</p>
-          </div>
-        </div>
-      </template>
+    <el-card class="login-card login-card--floating" shadow="never">
+      <div class="login-card__header">
+        <div class="login-card__eyebrow">欢迎回来</div>
+        <h2>管理员登录</h2>
+      </div>
 
       <el-alert
         v-if="errorMessage"
@@ -22,12 +17,18 @@
 
       <el-form label-position="top" @submit.prevent="handleSubmit">
         <el-form-item label="管理员邮箱">
-          <el-input v-model="form.email" placeholder="admin@pixris.online" />
+          <el-input v-model="form.email" size="large" placeholder="请输入管理员邮箱" />
         </el-form-item>
         <el-form-item label="登录密码">
-          <el-input v-model="form.password" type="password" show-password placeholder="请输入登录密码" />
+          <el-input
+            v-model="form.password"
+            size="large"
+            type="password"
+            show-password
+            placeholder="请输入登录密码"
+          />
         </el-form-item>
-        <el-button type="primary" class="login-card__button" @click="handleSubmit" :loading="submitting">
+        <el-button type="primary" size="large" class="login-card__button" @click="handleSubmit" :loading="submitting">
           登录后台
         </el-button>
       </el-form>
@@ -46,7 +47,7 @@ const submitting = ref(false)
 const errorMessage = ref('')
 
 const form = reactive({
-  email: 'admin@pixris.online',
+  email: '',
   password: '',
 })
 

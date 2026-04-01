@@ -1,52 +1,42 @@
-﻿<template>
-  <div class="panel-stack templates-grid">
-    <section class="panel-card">
+<template>
+  <div class="panel-stack">
+    <section class="panel-card" v-loading="jobListLoading">
       <div class="panel-card__header">
         <div>
           <p class="content__eyebrow">发送日志</p>
           <h3>最近邮件任务</h3>
         </div>
-        <el-button @click="loadAll" :loading="loading">刷新</el-button>
+        <el-button @click="loadAll" :loading="jobListLoading || reviewListLoading || auditListLoading">刷新</el-button>
       </div>
 
       <div class="list-stack">
-        <article v-for="job in emailJobs" :key="job.id" class="list-card list-card--interactive" @click="selectJob(job)">
+        <article
+          v-for="job in emailJobs"
+          :key="job.id"
+          class="list-card list-card--interactive"
+          :class="{ 'list-card--selected': selectedJobId === job.id && jobDrawerVisible }"
+          @click="openJobDrawer(job)"
+        >
           <strong>{{ job.sendRequest?.requestNo || job.id }}</strong>
           <span>{{ statusLabelMap[job.status] || job.status }} · {{ job.provider }}</span>
           <p>{{ job.sendRequest?.template?.name || '未知模板' }} · {{ job.sendRequest?.sourceProject || 'manual' }}</p>
         </article>
-        <el-empty v-if="!emailJobs.length" description="暂无邮件任务日志" />
+        <el-empty v-if="!emailJobs.length && !jobListLoading" description="暂无邮件任务日志" />
+      </div>
+
+      <div class="list-pagination" v-if="jobPagination.total > 0">
+        <el-pagination
+          layout="prev, pager, next"
+          :current-page="jobPagination.page"
+          :page-size="jobPagination.pageSize"
+          :total="jobPagination.total"
+          @current-change="handleJobPageChange"
+          :hide-on-single-page="false"
+        />
       </div>
     </section>
 
-    <section class="panel-card" v-if="selectedJob">
-      <div class="panel-card__header">
-        <div>
-          <p class="content__eyebrow">任务详情</p>
-          <h3>{{ selectedJob.sendRequest?.requestNo || selectedJob.id }}</h3>
-        </div>
-      </div>
-
-      <div class="preview-card">
-        <strong>任务状态</strong>
-        <p>{{ statusLabelMap[selectedJob.status] || selectedJob.status }} / {{ deliveryLabelMap[selectedJob.sendRequest?.deliveryStatus] || selectedJob.sendRequest?.deliveryStatus }}</p>
-        <strong>服务商消息 ID</strong>
-        <p>{{ selectedJob.providerMessageId || '尚未发送' }}</p>
-        <strong>最后错误</strong>
-        <p>{{ selectedJob.lastError || '无' }}</p>
-      </div>
-
-      <div class="list-stack" v-if="selectedJob.logs?.length">
-        <article v-for="log in selectedJob.logs" :key="log.id" class="list-card">
-          <strong>{{ log.eventType }}</strong>
-          <span>{{ log.level }} · {{ log.createdAt }}</span>
-          <p>{{ log.message }}</p>
-        </article>
-      </div>
-      <el-empty v-else description="该任务暂无事件日志" />
-    </section>
-
-    <section class="panel-card">
+    <section class="panel-card" v-loading="reviewListLoading">
       <div class="panel-card__header">
         <div>
           <p class="content__eyebrow">审核日志</p>
@@ -57,14 +47,25 @@
       <div class="list-stack">
         <article v-for="item in reviewLogs" :key="`${item.reviewType}-${item.id}`" class="list-card">
           <strong>{{ reviewTypeLabelMap[item.reviewType] || item.reviewType }}</strong>
-          <span>{{ reviewActionLabelMap[item.action] || item.action }} · {{ item.createdAt }}</span>
+          <span>{{ reviewActionLabelMap[item.action] || item.action }} · {{ formatDateTime(item.createdAt) }}</span>
           <p>{{ item.comment || '暂无备注' }}</p>
         </article>
-        <el-empty v-if="!reviewLogs.length" description="暂无审核日志" />
+        <el-empty v-if="!reviewLogs.length && !reviewListLoading" description="暂无审核日志" />
+      </div>
+
+      <div class="list-pagination" v-if="reviewPagination.total > 0">
+        <el-pagination
+          layout="prev, pager, next"
+          :current-page="reviewPagination.page"
+          :page-size="reviewPagination.pageSize"
+          :total="reviewPagination.total"
+          @current-change="handleReviewPageChange"
+          :hide-on-single-page="false"
+        />
       </div>
     </section>
 
-    <section class="panel-card">
+    <section class="panel-card" v-loading="auditListLoading">
       <div class="panel-card__header">
         <div>
           <p class="content__eyebrow">审计日志</p>
@@ -75,24 +76,84 @@
       <div class="list-stack">
         <article v-for="item in auditLogs" :key="item.id" class="list-card">
           <strong>{{ item.eventType }}</strong>
-          <span>{{ item.actorType }} · {{ item.status }} · {{ item.createdAt }}</span>
+          <span>{{ item.actorType }} · {{ item.status }} · {{ formatDateTime(item.createdAt) }}</span>
           <p>{{ item.message }}</p>
         </article>
-        <el-empty v-if="!auditLogs.length" description="暂无审计日志" />
+        <el-empty v-if="!auditLogs.length && !auditListLoading" description="暂无审计日志" />
+      </div>
+
+      <div class="list-pagination" v-if="auditPagination.total > 0">
+        <el-pagination
+          layout="prev, pager, next"
+          :current-page="auditPagination.page"
+          :page-size="auditPagination.pageSize"
+          :total="auditPagination.total"
+          @current-change="handleAuditPageChange"
+          :hide-on-single-page="false"
+        />
       </div>
     </section>
+
+    <el-drawer v-model="jobDrawerVisible" title="任务详情" size="460px" :with-header="true" :destroy-on-close="false">
+      <div v-loading="jobDetailLoading" class="sender-drawer-body">
+        <template v-if="selectedJob">
+          <div class="preview-card">
+            <strong>{{ selectedJob.sendRequest?.requestNo || selectedJob.id }}</strong>
+            <p>任务状态：{{ statusLabelMap[selectedJob.status] || selectedJob.status }}</p>
+            <p>投递状态：{{ deliveryLabelMap[selectedJob.sendRequest?.deliveryStatus] || selectedJob.sendRequest?.deliveryStatus }}</p>
+            <p>来源项目：{{ selectedJob.sendRequest?.sourceProject || 'manual' }}</p>
+            <p>模板名称：{{ selectedJob.sendRequest?.template?.name || '未知模板' }}</p>
+            <p>发件人：{{ selectedJob.sendRequest?.senderIdentity?.email || '未记录' }}</p>
+            <p>服务商消息 ID：{{ selectedJob.providerMessageId || '尚未发送' }}</p>
+            <p>最后错误：{{ selectedJob.lastError || '无' }}</p>
+            <p>入队时间：{{ formatDateTime(selectedJob.queuedAt) }}</p>
+            <p>开始时间：{{ formatDateTime(selectedJob.startedAt) }}</p>
+            <p>完成时间：{{ formatDateTime(selectedJob.finishedAt) }}</p>
+          </div>
+
+          <div class="list-stack" v-if="selectedJob.logs?.length">
+            <article v-for="log in selectedJob.logs" :key="log.id" class="list-card">
+              <strong>{{ log.eventType }}</strong>
+              <span>{{ log.level }} · {{ formatDateTime(log.createdAt) }}</span>
+              <p>{{ log.message }}</p>
+            </article>
+          </div>
+          <el-empty v-else description="该任务暂无事件日志" />
+        </template>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import api from '../lib/api'
 
-const loading = ref(false)
+const jobListLoading = ref(false)
+const reviewListLoading = ref(false)
+const auditListLoading = ref(false)
+const jobDetailLoading = ref(false)
 const emailJobs = ref([])
 const reviewLogs = ref([])
 const auditLogs = ref([])
+const selectedJobId = ref('')
 const selectedJob = ref(null)
+const jobDrawerVisible = ref(false)
+const jobPagination = reactive({
+  page: 1,
+  pageSize: 8,
+  total: 0,
+})
+const reviewPagination = reactive({
+  page: 1,
+  pageSize: 8,
+  total: 0,
+})
+const auditPagination = reactive({
+  page: 1,
+  pageSize: 8,
+  total: 0,
+})
 
 const statusLabelMap = {
   pending: '待处理',
@@ -111,6 +172,7 @@ const deliveryLabelMap = {
 
 const reviewTypeLabelMap = {
   template_review: '模板审核',
+  template: '模板审核',
   send_approval: '发送审批',
 }
 
@@ -121,33 +183,115 @@ const reviewActionLabelMap = {
   reject: '审核驳回',
 }
 
-async function loadAll() {
-  loading.value = true
+function formatDateTime(value) {
+  if (!value) {
+    return '未记录'
+  }
+
+  return new Date(value).toLocaleString('zh-CN', {
+    hour12: false,
+  })
+}
+
+async function openJobDrawer(job) {
+  selectedJobId.value = job.id
+  jobDrawerVisible.value = true
+  jobDetailLoading.value = true
+
   try {
-    const [jobsResponse, reviewsResponse, auditResponse] = await Promise.all([
-      api.get('/logs/email-jobs'),
-      api.get('/logs/reviews'),
-      api.get('/logs/audit'),
-    ])
-
-    emailJobs.value = jobsResponse.data
-    reviewLogs.value = reviewsResponse.data
-    auditLogs.value = auditResponse.data
-
-    if (selectedJob.value) {
-      const matched = emailJobs.value.find((item) => item.id === selectedJob.value.id)
-      selectedJob.value = matched || null
-    } else if (emailJobs.value.length) {
-      await selectJob(emailJobs.value[0])
-    }
+    const { data } = await api.get(`/logs/email-jobs/${job.id}`)
+    selectedJob.value = data
   } finally {
-    loading.value = false
+    jobDetailLoading.value = false
   }
 }
 
-async function selectJob(job) {
-  const { data } = await api.get(`/logs/email-jobs/${job.id}`)
-  selectedJob.value = data
+async function loadEmailJobs(page = jobPagination.page) {
+  jobListLoading.value = true
+  try {
+    const { data } = await api.get('/logs/email-jobs', {
+      params: {
+        page,
+        pageSize: jobPagination.pageSize,
+      },
+    })
+
+    emailJobs.value = data.items || []
+    jobPagination.page = data.page || page
+    jobPagination.pageSize = data.pageSize || jobPagination.pageSize
+    jobPagination.total = data.total || 0
+
+    if (jobDrawerVisible.value && selectedJobId.value) {
+      const matched = emailJobs.value.find((item) => item.id === selectedJobId.value)
+      if (matched) {
+        await openJobDrawer(matched)
+      } else {
+        jobDrawerVisible.value = false
+        selectedJobId.value = ''
+        selectedJob.value = null
+      }
+    }
+  } finally {
+    jobListLoading.value = false
+  }
+}
+
+async function loadReviewLogs(page = reviewPagination.page) {
+  reviewListLoading.value = true
+  try {
+    const { data } = await api.get('/logs/reviews', {
+      params: {
+        page,
+        pageSize: reviewPagination.pageSize,
+      },
+    })
+
+    reviewLogs.value = data.items || []
+    reviewPagination.page = data.page || page
+    reviewPagination.pageSize = data.pageSize || reviewPagination.pageSize
+    reviewPagination.total = data.total || 0
+  } finally {
+    reviewListLoading.value = false
+  }
+}
+
+async function loadAuditLogs(page = auditPagination.page) {
+  auditListLoading.value = true
+  try {
+    const { data } = await api.get('/logs/audit', {
+      params: {
+        page,
+        pageSize: auditPagination.pageSize,
+      },
+    })
+
+    auditLogs.value = data.items || []
+    auditPagination.page = data.page || page
+    auditPagination.pageSize = data.pageSize || auditPagination.pageSize
+    auditPagination.total = data.total || 0
+  } finally {
+    auditListLoading.value = false
+  }
+}
+
+async function loadAll() {
+  await Promise.all([
+    loadEmailJobs(jobPagination.page),
+    loadReviewLogs(reviewPagination.page),
+    loadAuditLogs(auditPagination.page),
+  ])
+}
+
+async function handleJobPageChange(page) {
+  await loadEmailJobs(page)
+}
+
+async function handleReviewPageChange(page) {
+  await loadReviewLogs(page)
+}
+
+async function handleAuditPageChange(page) {
+  await loadAuditLogs(page)
 }
 
 onMounted(loadAll)

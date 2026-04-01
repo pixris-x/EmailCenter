@@ -1,9 +1,10 @@
-import axios from 'axios'
+﻿import axios from 'axios'
 
 const TOKEN_STORAGE_KEY = 'email_center_access_token'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000',
+  // 本地开发默认走 Vite 代理，生产环境可按部署方式覆盖为完整域名。
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 15000,
 })
 
