@@ -5,6 +5,7 @@ const { isProjectAllowed, validateAllowedProjects } = require('../services/api-k
 const {
   createSendRequest,
   createSimpleContentSendRequest,
+  approveSendRequestAndQueue,
   buildSendRequestIncludes,
 } = require('../services/send-request-service');
 const { recordAuditLog } = require('../services/audit-log-service');
@@ -88,6 +89,11 @@ function resolveSourceProject(apiKey, bodyProject) {
   return 'default-project';
 }
 
+function shouldDirectSend(apiKey) {
+  const scopes = Array.isArray(apiKey?.scopes) ? apiKey.scopes : [];
+  return scopes.includes('send:direct');
+}
+
 async function findDuplicatedRequest(models, apiKeyId, sourceProject, idempotencyKey) {
   if (!idempotencyKey) {
     return null;
@@ -136,6 +142,20 @@ function normalizeSimpleSendBody(body = {}) {
     content: body.content || '',
     contentType: body.contentType === 'text' ? 'text' : 'html',
   };
+}
+
+async function maybeAutoApproveSendRequest(models, apiKey, sendRequestId) {
+  const deliveryMode = shouldDirectSend(apiKey) ? 'direct' : 'approval';
+
+  if (deliveryMode === 'direct') {
+    await approveSendRequestAndQueue({
+      sendRequestId,
+      comment: 'Auto-approved for trusted internal API direct send.',
+    });
+  }
+
+  const fresh = await loadFreshRequest(models, sendRequestId);
+  return { fresh, deliveryMode };
 }
 
 async function internalApiRoutes(app) {
@@ -190,7 +210,7 @@ async function internalApiRoutes(app) {
         comment: body.comment || 'Send request created from internal API.',
       });
 
-      const fresh = await loadFreshRequest(models, created.id);
+      const { fresh, deliveryMode } = await maybeAutoApproveSendRequest(models, apiKey, created.id);
 
       await recordAuditLog({
         actorType: 'api_key',
@@ -205,11 +225,13 @@ async function internalApiRoutes(app) {
           sourceProject,
           idempotencyKey,
           keyPrefix: apiKey.keyPrefix,
+          deliveryMode,
         },
       });
 
       return reply.status(202).send({
         duplicated: false,
+        deliveryMode,
         request: serializeInternalSendRequest(fresh),
       });
     } catch (error) {
@@ -275,7 +297,7 @@ async function internalApiRoutes(app) {
         comment: 'Simple send request created from internal API.',
       });
 
-      const fresh = await loadFreshRequest(models, created.id);
+      const { fresh, deliveryMode } = await maybeAutoApproveSendRequest(models, apiKey, created.id);
 
       await recordAuditLog({
         actorType: 'api_key',
@@ -291,11 +313,13 @@ async function internalApiRoutes(app) {
           idempotencyKey,
           keyPrefix: apiKey.keyPrefix,
           senderEmail: body.senderEmail,
+          deliveryMode,
         },
       });
 
       return reply.status(202).send({
         duplicated: false,
+        deliveryMode,
         request: serializeInternalSendRequest(fresh),
       });
     } catch (error) {

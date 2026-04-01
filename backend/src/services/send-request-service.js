@@ -1,5 +1,6 @@
 ﻿const { sequelize } = require('../config/database');
 const { initModels } = require('../models');
+const { enqueueEmailJob } = require('../queues/email-queue');
 
 function getModels() {
   return initModels(sequelize);
@@ -172,6 +173,75 @@ async function createSendRequestWithResolvedTemplate(payload) {
   });
 }
 
+async function approveSendRequestAndQueue(payload = {}) {
+  const models = getModels();
+  const now = new Date();
+
+  const result = await sequelize.transaction(async (transaction) => {
+    const item = await models.SendRequest.findByPk(payload.sendRequestId, { transaction });
+
+    if (!item) {
+      throw new Error('Send request not found.');
+    }
+
+    if (item.approvalStatus === 'rejected') {
+      throw new Error('Rejected send request cannot be auto-approved.');
+    }
+
+    if (item.approvalStatus === 'approved') {
+      const existingJob = await models.EmailJob.findOne({
+        where: { sendRequestId: item.id },
+        order: [['created_at', 'DESC']],
+        transaction,
+      });
+
+      return {
+        item,
+        emailJob: existingJob,
+      };
+    }
+
+    await item.update({
+      approvalStatus: 'approved',
+      deliveryStatus: 'queued',
+      approvedAt: now,
+      rejectedAt: null,
+      rejectionReason: null,
+    }, { transaction });
+
+    await models.SendApprovalLog.create({
+      sendRequestId: item.id,
+      reviewerAdminId: payload.reviewerAdminId || null,
+      action: 'approve',
+      comment: payload.comment || 'Auto-approved for trusted internal API key.',
+    }, { transaction });
+
+    const emailJob = await models.EmailJob.create({
+      sendRequestId: item.id,
+      queueName: 'email-send',
+      provider: 'resend_smtp',
+      status: 'pending',
+      attempts: 0,
+      maxAttempts: 3,
+      queuedAt: now,
+    }, { transaction });
+
+    return {
+      item,
+      emailJob,
+    };
+  });
+
+  if (result.emailJob) {
+    await enqueueEmailJob({
+      sendRequestId: result.item.id,
+      emailJobId: result.emailJob.id,
+    });
+  }
+
+  return result;
+}
+
 async function createSendRequest(payload) {
   return createSendRequestWithResolvedTemplate(payload);
 }
@@ -222,6 +292,7 @@ module.exports = {
   buildRequestNo,
   createSendRequest,
   createSimpleContentSendRequest,
+  approveSendRequestAndQueue,
   buildSendRequestIncludes,
   resolveTemplate,
   resolveSenderIdentity,
