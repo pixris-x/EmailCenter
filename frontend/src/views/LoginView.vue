@@ -2,6 +2,7 @@
   <div class="login-page">
     <el-card class="login-card login-card--floating" shadow="never">
       <div class="login-card__header">
+        <img src="/brand/icon-email-center.svg" alt="Pixris 邮件中心" class="login-card__logo" />
         <div class="login-card__eyebrow">欢迎回来</div>
         <h2>管理员登录</h2>
       </div>

@@ -1,0 +1,24 @@
+<svg width="388" height="92" viewBox="0 0 388 92" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logoBg" x1="12" y1="10" x2="80" y2="82" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4EA1FF"/>
+      <stop offset="1" stop-color="#1668E3"/>
+    </linearGradient>
+    <linearGradient id="logoAccent" x1="22" y1="24" x2="58" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D9ECFF"/>
+      <stop offset="1" stop-color="#FFFFFF"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="76" height="76" rx="24" fill="url(#logoBg)"/>
+  <rect x="18" y="22" width="56" height="42" rx="14" fill="url(#logoAccent)" fill-opacity="0.96"/>
+  <path d="M24 31.5L46 46.5L68 31.5" stroke="#1B5FD6" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M27 56L40.5 44.5" stroke="#7EB9FF" stroke-width="3.6" stroke-linecap="round"/>
+  <path d="M65 56L51.5 44.5" stroke="#7EB9FF" stroke-width="3.6" stroke-linecap="round"/>
+  <circle cx="64" cy="24" r="9" fill="#F0F7FF"/>
+  <path d="M60.5 24H67.5" stroke="#1668E3" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M64 20.5V27.5" stroke="#1668E3" stroke-width="2.6" stroke-linecap="round"/>
+  <text x="104" y="41" fill="#162033" font-size="28" font-weight="700" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif">邮件中心</text>
+  <text x="104" y="66" fill="#5B6780" font-size="14" font-weight="500" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif" letter-spacing="0.6">Pixris Email Center</text>
+  <rect x="104" y="72" width="116" height="8" rx="4" fill="#E8F2FF"/>
+  <rect x="104" y="72" width="72" height="8" rx="4" fill="#4EA1FF"/>
+</svg>

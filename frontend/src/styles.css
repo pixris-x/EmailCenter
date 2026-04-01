@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   color: var(--el-text-color-primary);
   background-color: var(--el-bg-color-page);
@@ -483,3 +483,4 @@ select {
     width: calc(100vw - 12px) !important;
   }
 }
+

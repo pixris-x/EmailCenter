@@ -1,8 +1,8 @@
-<template>
+﻿<template>
   <el-container class="app-shell">
     <el-aside width="240px" class="app-aside">
       <div class="app-brand">
-        <div class="app-brand__title">邮件中心</div>
+        <img src="/brand/logo-email-center.svg" alt="Pixris 邮件中心" class="app-brand__logo" />
         <div class="app-brand__sub">管理后台</div>
       </div>
 
@@ -22,9 +22,12 @@
 
     <el-container class="app-content-shell">
       <div class="app-mobile-bar">
-        <div>
-          <div class="app-header__tag">运营后台</div>
-          <strong>{{ pageTitle }}</strong>
+        <div class="app-mobile-bar__brand">
+          <img src="/brand/icon-email-center.svg" alt="Pixris 邮件中心" class="app-mobile-bar__logo" />
+          <div>
+            <div class="app-header__tag">运营后台</div>
+            <strong>{{ pageTitle }}</strong>
+          </div>
         </div>
         <el-button plain @click="mobileMenuVisible = true">菜单</el-button>
       </div>
@@ -50,6 +53,10 @@
       :destroy-on-close="false"
     >
       <div class="app-mobile-drawer__body">
+        <div class="app-mobile-drawer__brand">
+          <img src="/brand/logo-email-center.svg" alt="Pixris 邮件中心" class="app-mobile-drawer__logo" />
+        </div>
+
         <div class="app-user-block">
           <strong>{{ authStore.user.displayName || '管理员' }}</strong>
           <p>{{ authStore.user.email || '未登录' }}</p>
