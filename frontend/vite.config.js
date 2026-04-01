@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv } from 'vite'
+﻿import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig(({ mode }) => {
@@ -7,6 +7,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [vue()],
+    build: {
+      // 宝塔有时会在站点目录里写入 .user.ini，关闭自动清空可避免构建时因受保护文件报 EPERM。
+      emptyOutDir: false,
+    },
     server: {
       port: 3104,
       host: '0.0.0.0',

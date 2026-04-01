@@ -59,6 +59,17 @@ select {
 
 .login-card__header {
   margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.login-card__logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  box-shadow: 0 16px 34px rgba(22, 104, 227, 0.2);
 }
 
 .login-card__header h2 {
@@ -103,14 +114,15 @@ select {
 }
 
 .app-brand {
-  padding: 20px;
+  padding: 22px 20px 18px;
   border-bottom: 1px solid var(--el-border-color-light);
   flex-shrink: 0;
 }
 
 .app-brand__title {
   font-size: 20px;
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .app-brand__sub,
@@ -118,6 +130,10 @@ select {
   margin-top: 4px;
   color: var(--el-text-color-secondary);
   font-size: 13px;
+}
+
+.app-brand__sub {
+  margin-top: 6px;
 }
 
 .app-menu {
@@ -159,6 +175,13 @@ select {
   justify-content: space-between;
   gap: 16px;
   padding: 14px 16px 10px;
+}
+
+.app-mobile-bar__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
 .app-mobile-bar strong {
@@ -483,4 +506,3 @@ select {
     width: calc(100vw - 12px) !important;
   }
 }
-
