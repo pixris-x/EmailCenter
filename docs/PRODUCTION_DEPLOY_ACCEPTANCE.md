@@ -1,4 +1,4 @@
-# 生产部署与验收清单（批次 1–4）
+﻿# 生产部署与验收清单（批次 1–4）
 
 > 面向宝塔 Linux（PM2 + Nginx）部署。本文档不包含任何真实密钥，需自行在服务器 `.env` 中填写。
 > 配套文档：`docs/OPERATION_MANUAL.md`（基础部署）、`docs/EMAIL_CENTER_IMPLEMENTATION.md`（执行基线）、`docs/OPTIMIZATION_PLAN.md`（优化记录）。
@@ -43,7 +43,7 @@
 
 ```bash
 # 1. 进入项目目录（示例）
-cd /www/wwwroot/email-center
+cd /www/wwwroot/EmailCenter
 
 # 2. 拉取代码 + 安装依赖
 git pull
@@ -56,12 +56,21 @@ pnpm install --frozen-lockfile   # 或 pnpm install
 pnpm db:migrate
 
 # 5. 重启后端 API（PM2）
-pm2 restart email-center-api        # 名称以宝塔 PM2 实际配置为准
-pm2 restart email-center-worker     # email worker
+# 推荐：仓库根已有 ecosystem.config.js（编排 API + email worker 两个进程，密钥外置走 .env）
+#   若路径不是 /www/wwwroot/EmailCenter，先修改 ecosystem.config.js 顶部的 APP_ROOT
+pm2 start ecosystem.config.js     # 首次启动
+pm2 restart ecosystem.config.js   # 或更新代码后：pm2 restart email_center_api && pm2 restart email_center_worker
+pm2 save                          # 保存进程列表（服务器重启自动恢复）
+# pm2 startup                      # 按提示执行输出的一次性命令以开启开机自启（只需一次）
+
+# 等价的手动方式：
+# cd /www/wwwroot/EmailCenter && pm2 start backend/src/server.js --name email_center_api
+# cd /www/wwwroot/EmailCenter && pm2 start backend/src/workers/email-worker.js --name email_center_worker
 
 # 6. 确认进程健康
 pm2 status
-curl -s http://127.0.0.1:3000/health | head -c 300
+pm2 logs email_center_api --lines 50   # 确认无「生产配置校验失败/警告」
+curl -s http://127.0.0.1:3000/health | head -c 300   # 端口以 .env 的 APP_PORT 为准
 ```
 
 > 若 `APP_ENV=production` 后启动失败，说明配置校验拦截——查看 `pm2 logs` 中列出的缺失项并补齐。
@@ -71,7 +80,7 @@ curl -s http://127.0.0.1:3000/health | head -c 300
 ## 三、前端部署
 
 ```bash
-cd /www/wwwroot/email-center
+cd /www/wwwroot/EmailCenter
 # 构建时需 VITE_API_BASE_URL=/api（默认即可）
 pnpm build:frontend
 # 将 frontend/dist 内容发布到站点目录（宝塔站点根），或按现有部署方式同步
@@ -89,7 +98,7 @@ Nginx 要点（宝塔站点配置内）：
 
 宝塔计划任务（Shell，每日一次）：
 ```bash
-cd /www/wwwroot/email-center && /www/server/nodejs/.../pnpm logs:purge 2>&1 >> logs/purge.log
+cd /www/wwwroot/EmailCenter && /www/server/nodejs/.../pnpm logs:purge 2>&1 >> logs/purge.log
 ```
 （路径以服务器 pnpm/node 实际位置为准；先手动 `pnpm logs:purge --dry-run` 验证。）
 
