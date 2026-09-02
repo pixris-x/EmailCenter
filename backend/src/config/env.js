@@ -1,4 +1,4 @@
-﻿const path = require('node:path');
+const path = require('node:path');
 const dotenv = require('dotenv');
 
 const candidatePaths = [
@@ -58,6 +58,9 @@ const env = {
     jwtSecret: process.env.APP_JWT_SECRET || '',
     jwtExpiresIn: process.env.APP_JWT_EXPIRES_IN || '12h',
     encryptionKey: process.env.APP_ENCRYPTION_KEY || '',
+    loginMaxFailures: toNumber(process.env.APP_LOGIN_MAX_FAILURES, 5),
+    loginLockMinutes: toNumber(process.env.APP_LOGIN_LOCK_MINUTES, 30),
+    loginIpMaxPerMinute: toNumber(process.env.APP_LOGIN_IP_MAX_PER_MINUTE, 10),
   },
   database: {
     host: process.env.DB_HOST || '',
@@ -103,6 +106,53 @@ const env = {
   internalApi: {
     rateLimitPerMinute: toNumber(process.env.INTERNAL_API_RATE_LIMIT_PER_MINUTE, 30),
   },
+  mail: {
+    // 发送失败/退信时的告警接收邮箱
+    alertTo: process.env.MAIL_ALERT_TO || '',
+  },
+  webhook: {
+    // Resend 回执 webhook 签名密钥（whsec_...）；为空时不校验（仅开发）。
+    resendSecret: process.env.RESEND_WEBHOOK_SECRET || '',
+    // 允许的回执事件时间戳容差（秒）
+    timestampToleranceSeconds: toNumber(process.env.RESEND_WEBHOOK_TOLERANCE_SECONDS, 300),
+  },
 };
 
-module.exports = { env };
+// 生产环境必需配置校验：缺关键密钥时直接拒绝启动，避免带病上线。
+// 非生产环境仅返回问题清单，由调用方决定是否告警。
+function validateRequiredConfig() {
+  const isProduction = env.app.env === 'production';
+  const problems = [];
+
+  function requireSecret(key, value, { minLength = 0 } = {}) {
+    const current = String(value || '').trim();
+    if (!current || (minLength && current.length < minLength)) {
+      problems.push(`${key} 缺失${minLength ? `（至少 ${minLength} 字符）` : ''}`);
+    }
+  }
+
+  function requireHttpsUrl(key, value) {
+    if (!String(value || '').startsWith('https://')) {
+      problems.push(`${key} 必须是 https 地址`);
+    }
+  }
+
+  requireSecret('APP_JWT_SECRET', env.app.jwtSecret, { minLength: 32 });
+  requireSecret('RESEND_SMTP_PASS', env.smtp.pass);
+  requireSecret('DB_HOST', env.database.host);
+
+  if (isProduction) {
+    requireHttpsUrl('APP_BASE_URL', env.app.baseUrl);
+    requireHttpsUrl('APP_WEB_URL', env.app.webUrl);
+  }
+
+  if (isProduction && problems.length) {
+    throw new Error(
+      `生产环境配置校验失败，拒绝启动：\n- ${problems.join('\n- ')}\n请先在 .env 中补齐上述配置。`,
+    );
+  }
+
+  return { problems };
+}
+
+module.exports = { env, validateRequiredConfig };

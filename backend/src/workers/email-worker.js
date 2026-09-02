@@ -1,11 +1,17 @@
-﻿const { Worker } = require('bullmq');
-const { env } = require('../config/env');
+const { Worker } = require('bullmq');
+const { env, validateRequiredConfig } = require('../config/env');
 const { getRedisConnectionOptions } = require('../config/redis');
 const { sequelize, isDatabaseConfigured } = require('../config/database');
 const { initModels } = require('../models');
 const { sendMailMessage } = require('../services/mail-service');
+const { closeSmtpTransport } = require('../config/smtp');
 const { renderEmailTemplate } = require('../services/template-renderer');
 const { resolveAttachmentAbsolutePath } = require('../services/attachment-service');
+
+const { problems } = validateRequiredConfig();
+if (problems.length) {
+  console.warn(`[email-worker] configuration check warnings: ${problems.join('; ')}`);
+}
 
 const models = initModels(sequelize);
 
@@ -168,6 +174,7 @@ worker.on('error', (error) => {
 
 async function shutdown() {
   await worker.close();
+  await closeSmtpTransport();
   await sequelize.close().catch(() => {});
   process.exit(0);
 }

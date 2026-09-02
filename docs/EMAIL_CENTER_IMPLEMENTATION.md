@@ -1,4 +1,4 @@
-﻿# Email Center 实施与进度文档
+# Email Center 实施与进度文档
 
 ## 1. 文档用途
 
@@ -282,16 +282,28 @@
 - [x] 已完成前端请求层自动重试与日志开关
 - [x] 已完成生产环境上线与联调验收
 
+## 8.1 维护阶段优化（按 docs/OPTIMIZATION_PLAN.md 推进）
+
+- [x] 批次 1：修复 scheduledAt 定时发送（两条审批路径支持 delay 入队 + jobId 幂等，管理台提供定时发送 UI）
+- [x] 批次 1：管理台登录防爆破（Redis email 失败锁定 + IP 每分钟限流 + 审计）
+- [x] 批次 1：/mail/test 与 /queue/test 接口限流
+- [x] 批次 1：启动安全配置校验（生产环境缺失关键密钥拒绝启动）
+- [x] 批次 1：收件人邮箱格式校验全链路接入（管理台 / 内部 API / 测试发信）
+- [x] 批次 1：本地自动化联调通过（36/36，`tmp/e2e/e2e.cjs`：假 SMTP + 独立队列 + 真实 API/Worker），待生产部署验收
+- [x] 批次 3：SMTP 连接池、失败任务手动重试（接口 + 前端按钮）、日志清理脚本均完成并通过自动化联调（批次 1+3 全量回归 49/49），待生产部署验收
+- [x] 批次 2：Resend 回执 webhook（Svix 签名校验 + bounced/delivered/complaint 落库 + 退信告警）完成并通过自动化联调（批次 1+2+3 全量回归 58/58），待生产部署验收
+- [x] 批次 4：单元测试（node:test，30/30）+ ESLint（backend/frontend 全绿）+ E2E 收编（`pnpm test:e2e`，58/58）+ `pnpm verify` 一键门禁，均完成
+- [ ] 批次 5：模板 XSS 加固 / token 存储迁移 / API Key 日额度（可选）
+
 ## 9. 下一步
 
 当前应执行的阶段是：`已完成上线，进入维护阶段`
 
-下一步实施顺序：
-1. 在宝塔中创建站点与反向代理
-2. 准备前端构建产物与后端 PM2 配置
-3. 配置生产环境变量、HTTPS 与 Redis/PostgreSQL 连接
-4. 执行上线前真实发信验收
-5. 补充管理员账号与权限控制能力
+维护阶段优化已建立独立基线文档 `docs/OPTIMIZATION_PLAN.md`：
+
+1. 批次 1–4 已完成并通过本地自动化联调（单测 30/30、E2E 58/58、`pnpm verify` 全绿）
+2. 批次 5（可选安全强化：模板 XSS 版本化 / token HttpOnly / API Key 日额度）未开始，按批次顺序推进
+3. 当前剩余事项：**生产部署与验收**，请按 `docs/PRODUCTION_DEPLOY_ACCEPTANCE.md` 执行（含 .env 完整清单、宝塔部署步骤、curl webhook 自测、退信实测、purge 计划任务）
 
 ## 10. 文档维护要求
 

@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="panel-stack templates-grid">
     <section class="panel-card" v-loading="senderPanelLoading">
       <div class="panel-card__header">
@@ -82,6 +82,23 @@
         <el-form-item label="来源项目">
           <el-input v-model="requestForm.sourceProject" placeholder="billing-service" />
         </el-form-item>
+        <el-form-item label="发送方式">
+          <el-radio-group v-model="requestForm.sendMode">
+            <el-radio value="now">立即发送（审批通过后马上发出）</el-radio>
+            <el-radio value="scheduled">定时发送</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="requestForm.sendMode === 'scheduled'" label="计划发送时间">
+          <el-date-picker
+            v-model="requestForm.scheduledAt"
+            type="datetime"
+            placeholder="选择计划发送时间"
+            format="YYYY-MM-DD HH:mm"
+            :disabled-date="disablePastDate"
+            style="width: 100%"
+          />
+          <p class="form-hint">审批通过后按计划时间自动发出；若审批晚于计划时间则立即发送。</p>
+        </el-form-item>
         <el-form-item label="模板变量 JSON">
           <el-input v-model="requestForm.templatePayload" type="textarea" :rows="5" />
         </el-form-item>
@@ -133,6 +150,10 @@
         <p>{{ selectedRequest.sourceProject || 'manual' }}</p>
         <strong>状态</strong>
         <p>{{ approvalStatusLabelMap[selectedRequest.approvalStatus] || selectedRequest.approvalStatus }} / {{ deliveryStatusLabelMap[selectedRequest.deliveryStatus] || selectedRequest.deliveryStatus }}</p>
+        <template v-if="selectedRequest.scheduledAt">
+          <strong>计划发送时间</strong>
+          <p>{{ formatDateTime(selectedRequest.scheduledAt) }}</p>
+        </template>
       </div>
 
       <el-alert
@@ -314,6 +335,8 @@ const deliveryStatusLabelMap = {
   processing: '发送中',
   sent: '已发送',
   failed: '发送失败',
+  bounced: '已退信',
+  delivered: '已送达',
 }
 
 const approvalActionLabelMap = {
@@ -334,7 +357,16 @@ const requestForm = reactive({
   toRecipients: '',
   sourceProject: 'manual-console',
   templatePayload: '{\n  "name": "Pixris 用户"\n}',
+  sendMode: 'now',
+  scheduledAt: null,
 })
+
+function disablePastDate(time) {
+  if (!time) {
+    return false
+  }
+  return time.getTime() < Date.now() - 24 * 60 * 60 * 1000
+}
 
 const approvedTemplates = computed(() => templates.value.filter((item) => item.status === 'approved'))
 
@@ -575,19 +607,39 @@ async function removeSender(sender) {
 async function createSendRequest() {
   requestSubmitting.value = true
   try {
-    const { data } = await api.post('/send-requests', {
+    const payload = {
       templateId: requestForm.templateId,
       senderIdentityId: requestForm.senderIdentityId,
       toRecipients: requestForm.toRecipients,
       sourceProject: requestForm.sourceProject,
       templatePayload: parsePayload(),
-    })
+    }
+
+    if (requestForm.sendMode === 'scheduled') {
+      const scheduledAt = new Date(requestForm.scheduledAt)
+      if (!requestForm.scheduledAt || Number.isNaN(scheduledAt.getTime())) {
+        ElMessage.error('请选择有效的计划发送时间。')
+        return
+      }
+      if (scheduledAt.getTime() <= Date.now()) {
+        ElMessage.error('计划发送时间需晚于当前时间。')
+        return
+      }
+      payload.scheduledAt = scheduledAt.toISOString()
+    }
+
+    const { data } = await api.post('/send-requests', payload)
     await loadRequestData(1)
     const createdItem = requests.value.find((item) => item.id === data.id)
     if (createdItem) {
       await selectRequest(createdItem)
     }
-    ElMessage.success('发送申请已创建，现在可以上传附件并提交审批。')
+    const successMessage = requestForm.sendMode === 'scheduled'
+      ? '发送申请已创建，审批通过后将按计划时间自动发送。'
+      : '发送申请已创建，现在可以上传附件并提交审批。'
+    ElMessage.success(successMessage)
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || error.message)
   } finally {
     requestSubmitting.value = false
   }

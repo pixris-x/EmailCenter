@@ -1,11 +1,16 @@
 const { buildApp } = require('./app');
-const { env } = require('./config/env');
+const { env, validateRequiredConfig } = require('./config/env');
 const { sequelize, isDatabaseConfigured } = require('./config/database');
 const { initModels } = require('./models');
 
 async function start() {
   const app = buildApp();
   initModels(sequelize);
+
+  const { problems } = validateRequiredConfig();
+  if (problems.length) {
+    app.log.warn({ problems }, 'Configuration check warnings (non-production)');
+  }
 
   try {
     if (isDatabaseConfigured()) {

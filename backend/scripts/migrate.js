@@ -58,7 +58,7 @@ run().catch(async (error) => {
   console.error(error.message);
   try {
     await sequelize.close();
-  } catch (closeError) {
+  } catch {
     // ignore close failures while exiting
   }
   process.exit(1);

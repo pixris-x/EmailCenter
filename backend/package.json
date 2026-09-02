@@ -13,7 +13,10 @@
     "redis:ping": "node scripts/redis-ping.js",
     "queue:test": "node scripts/enqueue-test-job.js",
     "admin:hash": "node scripts/generate-password-hash.js",
-    "admin:create": "node scripts/create-admin-user.js"
+    "admin:create": "node scripts/create-admin-user.js",
+    "logs:purge": "node scripts/purge-old-logs.js",
+    "lint": "eslint src scripts test",
+    "test": "node --test"
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",

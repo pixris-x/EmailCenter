@@ -12,6 +12,14 @@
     "redis:ping": "pnpm --dir backend redis:ping",
     "queue:test": "pnpm --dir backend queue:test",
     "admin:hash": "pnpm --dir backend admin:hash",
-    "admin:create": "pnpm --dir backend admin:create"
+    "admin:create": "pnpm --dir backend admin:create",
+    "logs:purge": "pnpm --dir backend logs:purge",
+    "lint": "pnpm --dir backend lint && pnpm --dir frontend lint",
+    "test:backend": "pnpm --dir backend test",
+    "test:e2e": "node scripts/e2e/e2e.cjs",
+    "verify": "pnpm lint && pnpm test:backend && pnpm build:frontend"
+  },
+  "devDependencies": {
+    "eslint": "^10.9.1"
   }
 }

@@ -25,3 +25,10 @@ Email Center 是一个内部使用的邮件中心项目。
 - `pnpm worker:email`
 - `pnpm redis:ping`
 - `pnpm queue:test`
+- `pnpm lint`（ESLint，backend + frontend）
+- `pnpm test:backend`（node:test 单测）
+- `pnpm test:e2e`（本地端到端联调，需 Redis + PostgreSQL；假 SMTP，不发真实邮件）
+- `pnpm verify`（lint + test + build 一键门禁）
+- `pnpm logs:purge`（清理过期日志，建议宝塔计划任务每日执行）
+
+生产部署与验收请按 `docs/PRODUCTION_DEPLOY_ACCEPTANCE.md` 执行。

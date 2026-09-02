@@ -1,6 +1,7 @@
-﻿const { sequelize } = require('../config/database');
+const { sequelize } = require('../config/database');
 const { initModels } = require('../models');
 const { enqueueEmailJob } = require('../queues/email-queue');
+const { validateRecipientList } = require('../utils/email-utils');
 
 function getModels() {
   return initModels(sequelize);
@@ -19,6 +20,35 @@ function toRecipientArray(value) {
   }
 
   return [];
+}
+
+// 计算入队延迟：scheduledAt 已过期或缺失时立即发送。
+function computeQueueDelay(scheduledAt) {
+  if (!scheduledAt) {
+    return 0;
+  }
+
+  const scheduledTime = new Date(scheduledAt).getTime();
+  if (!Number.isFinite(scheduledTime)) {
+    return 0;
+  }
+
+  return Math.max(0, scheduledTime - Date.now());
+}
+
+function assertValidScheduledAt(value) {
+  if (value === undefined || value === null || value === '') {
+    return;
+  }
+
+  const scheduledTime = new Date(value).getTime();
+  if (!Number.isFinite(scheduledTime)) {
+    throw new Error('scheduledAt must be a valid ISO datetime.');
+  }
+
+  if (scheduledTime <= Date.now()) {
+    throw new Error('scheduledAt must be in the future.');
+  }
 }
 
 function buildRequestNo() {
@@ -133,12 +163,16 @@ async function ensureSimpleContentTemplate(models, payload = {}) {
 
 async function createSendRequestWithResolvedTemplate(payload) {
   const models = getModels();
-  const toRecipients = toRecipientArray(payload.toRecipients);
+  assertValidScheduledAt(payload.scheduledAt);
+
+  const toRecipients = validateRecipientList(payload.toRecipients, { field: 'to' });
 
   if (!toRecipients.length) {
     throw new Error('At least one recipient is required.');
   }
 
+  const ccRecipients = validateRecipientList(payload.ccRecipients, { field: 'cc' });
+  const bccRecipients = validateRecipientList(payload.bccRecipients, { field: 'bcc' });
   const template = payload.templateRecord || await resolveTemplate(models, payload);
   const senderIdentity = await resolveSenderIdentity(models, payload);
 
@@ -153,8 +187,8 @@ async function createSendRequestWithResolvedTemplate(payload) {
       sourceProject: payload.sourceProject || null,
       idempotencyKey: payload.idempotencyKey || null,
       toRecipients,
-      ccRecipients: toRecipientArray(payload.ccRecipients),
-      bccRecipients: toRecipientArray(payload.bccRecipients),
+      ccRecipients,
+      bccRecipients,
       subjectOverride: payload.subjectOverride || null,
       templatePayload: payload.templatePayload || {},
       approvalStatus: 'pending_approval',
@@ -233,10 +267,17 @@ async function approveSendRequestAndQueue(payload = {}) {
   });
 
   if (result.emailJob) {
-    await enqueueEmailJob({
-      sendRequestId: result.item.id,
-      emailJobId: result.emailJob.id,
-    });
+    // delay 支持 scheduledAt 定时发送；jobId 使用 emailJob.id 保证同一申请不会重复入队。
+    await enqueueEmailJob(
+      {
+        sendRequestId: result.item.id,
+        emailJobId: result.emailJob.id,
+      },
+      {
+        delay: computeQueueDelay(result.item.scheduledAt),
+        jobId: result.emailJob.id,
+      },
+    );
   }
 
   return result;
@@ -290,6 +331,8 @@ function buildSendRequestIncludes(models) {
 module.exports = {
   toRecipientArray,
   buildRequestNo,
+  computeQueueDelay,
+  assertValidScheduledAt,
   createSendRequest,
   createSimpleContentSendRequest,
   approveSendRequestAndQueue,

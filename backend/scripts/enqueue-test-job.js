@@ -19,7 +19,7 @@ run().catch(async (error) => {
   console.error(`Queue test failed: ${error.message}`);
   try {
     await closeEmailQueue();
-  } catch (closeError) {
+  } catch {
     // ignore queue close failure while exiting
   }
   process.exit(1);

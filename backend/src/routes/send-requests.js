@@ -1,7 +1,7 @@
 const { sequelize } = require('../config/database');
 const { initModels } = require('../models');
 const { enqueueEmailJob } = require('../queues/email-queue');
-const { createSendRequest, buildSendRequestIncludes } = require('../services/send-request-service');
+const { createSendRequest, buildSendRequestIncludes, computeQueueDelay } = require('../services/send-request-service');
 const { recordAuditLog } = require('../services/audit-log-service');
 const { parsePagination, buildPaginatedResponse } = require('../services/pagination-service');
 
@@ -148,6 +148,10 @@ async function sendRequestRoutes(app) {
       await enqueueEmailJob({
         sendRequestId: item.id,
         emailJobId: jobRecord.id,
+      }, {
+        // scheduledAt 定时发送：审批通过后按计划时间入队执行；jobId 幂等防重复。
+        delay: computeQueueDelay(item.scheduledAt),
+        jobId: jobRecord.id,
       });
     }
 

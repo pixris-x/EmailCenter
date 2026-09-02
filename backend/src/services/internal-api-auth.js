@@ -1,10 +1,13 @@
-const { createRedisConnection } = require('../config/redis');
+const { createGuardRedisConnection } = require('../config/redis');
 const { env } = require('../config/env');
 const { sequelize } = require('../config/database');
 const { initModels } = require('../models');
 const { hashApiKey, hasRequiredScopes } = require('./api-key-service');
 
-const redisClient = createRedisConnection();
+const redisClient = createGuardRedisConnection();
+redisClient.on('error', (error) => {
+  console.warn(`[internal-api-auth] redis error: ${error.message}`);
+});
 
 function getModels() {
   return initModels(sequelize);

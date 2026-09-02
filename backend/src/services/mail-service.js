@@ -1,4 +1,5 @@
-const { createSmtpTransport, getDefaultFromAddress } = require('../config/smtp');
+const { getSmtpTransport, getDefaultFromAddress } = require('../config/smtp');
+const { validateRecipientList } = require('../utils/email-utils');
 
 function mapTransportResult(info) {
   return {
@@ -9,36 +10,43 @@ function mapTransportResult(info) {
   };
 }
 
-async function verifySmtpConnection() {
-  const transporter = createSmtpTransport();
-  try {
-    await transporter.verify();
-    return { verified: true };
-  } finally {
-    transporter.close();
+function assertValidMessageRecipients(message) {
+  for (const field of ['to', 'cc', 'bcc']) {
+    const value = message[field];
+    if (value === undefined || value === null || value === '') {
+      continue;
+    }
+
+    validateRecipientList(value, { field });
   }
 }
 
+async function verifySmtpConnection() {
+  const transporter = getSmtpTransport();
+  const result = await transporter.verify();
+  return { verified: Boolean(result) };
+}
+
 async function sendMailMessage(message) {
-  const transporter = createSmtpTransport();
+  // 兜底校验：即使上层入口遗漏，也不允许向非法地址发信。
+  assertValidMessageRecipients(message);
 
-  try {
-    const info = await transporter.sendMail({
-      from: message.from || getDefaultFromAddress(),
-      to: message.to,
-      cc: message.cc,
-      bcc: message.bcc,
-      replyTo: message.replyTo,
-      subject: message.subject,
-      html: message.html,
-      text: message.text,
-      attachments: message.attachments || [],
-    });
+  // 复用进程级连接池，不再每次新建/关闭连接。
+  const transporter = getSmtpTransport();
 
-    return mapTransportResult(info);
-  } finally {
-    transporter.close();
-  }
+  const info = await transporter.sendMail({
+    from: message.from || getDefaultFromAddress(),
+    to: message.to,
+    cc: message.cc,
+    bcc: message.bcc,
+    replyTo: message.replyTo,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    attachments: message.attachments || [],
+  });
+
+  return mapTransportResult(info);
 }
 
 async function sendTestEmail({ to, subject, html, text, from }) {

@@ -492,6 +492,26 @@ function initModels(sequelize) {
       allowNull: true,
       field: 'finished_at',
     },
+    bouncedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'bounced_at',
+    },
+    bounceType: {
+      type: DataTypes.STRING(30),
+      allowNull: true,
+      field: 'bounce_type',
+    },
+    bounceReason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'bounce_reason',
+    },
+    deliveredAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'delivered_at',
+    },
   }, {
     tableName: 'email_jobs',
     ...withTimestamps(),
@@ -540,6 +560,53 @@ function initModels(sequelize) {
     },
   }, {
     tableName: 'email_logs',
+    underscored: true,
+    freezeTableName: true,
+    timestamps: false,
+  });
+
+  const MailFeedbackEvent = sequelize.define('MailFeedbackEvent', {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
+    emailJobId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      field: 'email_job_id',
+    },
+    providerMessageId: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      field: 'provider_message_id',
+    },
+    kind: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+    },
+    statusCode: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      field: 'status_code',
+    },
+    reason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    rawContent: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'raw_content',
+    },
+    receivedAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+      field: 'received_at',
+    },
+  }, {
+    tableName: 'mail_feedback_events',
     underscored: true,
     freezeTableName: true,
     timestamps: false,
@@ -741,6 +808,8 @@ function initModels(sequelize) {
   EmailJob.hasMany(EmailLog, { foreignKey: 'emailJobId', as: 'logs' });
   EmailLog.belongsTo(EmailJob, { foreignKey: 'emailJobId', as: 'emailJob' });
   EmailLog.belongsTo(SendRequest, { foreignKey: 'sendRequestId', as: 'sendRequest' });
+  EmailJob.hasMany(MailFeedbackEvent, { foreignKey: 'emailJobId', as: 'feedbackEvents' });
+  MailFeedbackEvent.belongsTo(EmailJob, { foreignKey: 'emailJobId', as: 'emailJob' });
   Attachment.belongsTo(SendRequest, { foreignKey: 'sendRequestId', as: 'sendRequest' });
   ApiKey.belongsTo(AdminUser, { foreignKey: 'createdByAdminId', as: 'createdByAdmin' });
   ApiKey.hasMany(SendRequest, { foreignKey: 'requestedViaApiKeyId', as: 'sendRequests' });
@@ -756,6 +825,7 @@ function initModels(sequelize) {
     SendApprovalLog,
     EmailJob,
     EmailLog,
+    MailFeedbackEvent,
     Attachment,
     AuditLog,
     ApiKey,

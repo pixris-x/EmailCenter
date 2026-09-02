@@ -50,6 +50,13 @@ function serializeEmailJob(item) {
       providerResponse: log.providerResponse,
       createdAt: log.createdAt,
     })),
+    feedbackEvents: (json.feedbackEvents || []).map((event) => ({
+      id: event.id,
+      kind: event.kind,
+      statusCode: event.statusCode,
+      reason: event.reason,
+      receivedAt: event.receivedAt,
+    })),
   };
 }
 
@@ -92,7 +99,7 @@ async function logRoutes(app) {
   });
 
   app.get('/logs/email-jobs', async (request) => {
-    const { EmailJob, SendRequest, EmailTemplate, SenderIdentity, EmailLog, ApiKey } = getModels();
+    const { EmailJob, SendRequest, EmailTemplate, SenderIdentity, EmailLog, ApiKey, MailFeedbackEvent } = getModels();
     const where = {};
     const pagination = parsePagination(request.query, { defaultPageSize: 8, maxPageSize: 50 });
 
@@ -121,6 +128,11 @@ async function logRoutes(app) {
           as: 'logs',
           required: false,
         },
+        {
+          model: MailFeedbackEvent,
+          as: 'feedbackEvents',
+          required: false,
+        },
       ],
       order: [['created_at', 'DESC']],
       distinct: true,
@@ -137,7 +149,7 @@ async function logRoutes(app) {
   });
 
   app.get('/logs/email-jobs/:id', async (request, reply) => {
-    const { EmailJob, SendRequest, EmailTemplate, SenderIdentity, EmailLog, Attachment, ApiKey } = getModels();
+    const { EmailJob, SendRequest, EmailTemplate, SenderIdentity, EmailLog, Attachment, ApiKey, MailFeedbackEvent } = getModels();
     const item = await EmailJob.findByPk(request.params.id, {
       include: [
         {
@@ -153,6 +165,11 @@ async function logRoutes(app) {
         {
           model: EmailLog,
           as: 'logs',
+          required: false,
+        },
+        {
+          model: MailFeedbackEvent,
+          as: 'feedbackEvents',
           required: false,
         },
       ],

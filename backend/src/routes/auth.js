@@ -1,9 +1,14 @@
-﻿const bcrypt = require('bcryptjs');
+const bcrypt = require('bcryptjs');
 const { sequelize } = require('../config/database');
 const { initModels } = require('../models');
 const { verifyAdminPassword, signAdminAccessToken } = require('../services/auth-service');
 const { recordAuditLog } = require('../services/audit-log-service');
 const { serializeAdminUser } = require('../services/permission-service');
+const {
+  assertLoginAllowed,
+  recordLoginFailure,
+  clearLoginFailures,
+} = require('../services/rate-limit-service');
 
 function getModels() {
   return initModels(sequelize);
@@ -18,6 +23,41 @@ async function authRoutes(app) {
       return reply.status(400).send({ message: '邮箱和密码不能为空。' });
     }
 
+    const blocked = await assertLoginAllowed({ email, ip: request.ip });
+    if (blocked) {
+      await recordAuditLog({
+        actorType: 'anonymous',
+        actorLabel: email,
+        eventType: 'admin_login_locked',
+        resourceType: 'admin_user',
+        status: 'error',
+        message: `管理员登录被临时锁定：${email}（${blocked.reason}）`,
+      });
+      return reply.status(429).send({ message: '登录尝试过于频繁，请稍后再试。' });
+    }
+
+    async function handleLoginFailure({ actorType, actorId, actorLabel, defaultMessage }) {
+      const failure = await recordLoginFailure({ email, ip: request.ip });
+      const blockedNow = failure.emailLocked || failure.ipBlocked;
+
+      await recordAuditLog({
+        actorType,
+        actorId,
+        actorLabel,
+        eventType: blockedNow ? 'admin_login_locked' : 'admin_login_failed',
+        resourceType: 'admin_user',
+        resourceId: actorId || null,
+        status: 'error',
+        message: blockedNow
+          ? `管理员登录被临时锁定：${actorLabel}`
+          : `管理员登录失败：${actorLabel}`,
+      });
+
+      return reply.status(blockedNow ? 429 : 401).send({
+        message: blockedNow ? '登录尝试过于频繁，请稍后再试。' : defaultMessage,
+      });
+    }
+
     const adminUser = await AdminUser.findOne({
       where: { email },
       include: [
@@ -26,32 +66,25 @@ async function authRoutes(app) {
     });
 
     if (!adminUser || adminUser.status !== 'active') {
-      await recordAuditLog({
+      return handleLoginFailure({
         actorType: 'anonymous',
+        actorId: null,
         actorLabel: email,
-        eventType: 'admin_login_failed',
-        resourceType: 'admin_user',
-        status: 'error',
-        message: `管理员登录失败：${email}`,
+        defaultMessage: '账号或密码错误。',
       });
-      return reply.status(401).send({ message: '账号或密码错误。' });
     }
 
     const passwordValid = await verifyAdminPassword(password, adminUser.passwordHash);
     if (!passwordValid) {
-      await recordAuditLog({
+      return handleLoginFailure({
         actorType: 'admin',
         actorId: adminUser.id,
         actorLabel: adminUser.email,
-        eventType: 'admin_login_failed',
-        resourceType: 'admin_user',
-        resourceId: adminUser.id,
-        status: 'error',
-        message: `管理员登录失败：${adminUser.email}`,
+        defaultMessage: '账号或密码错误。',
       });
-      return reply.status(401).send({ message: '账号或密码错误。' });
     }
 
+    await clearLoginFailures(email);
     await adminUser.update({ lastLoginAt: new Date() });
     const accessToken = signAdminAccessToken(adminUser);
     const user = serializeAdminUser(adminUser);

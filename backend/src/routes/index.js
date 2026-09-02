@@ -10,6 +10,7 @@ const { apiKeyRoutes } = require('./api-keys');
 const { internalApiRoutes } = require('./internal-api');
 const { logRoutes } = require('./logs');
 const { accessControlRoutes } = require('./access-control');
+const { webhookRoutes } = require('./webhooks');
 
 function registerRoutes(app) {
   healthRoutes(app);
@@ -24,6 +25,7 @@ function registerRoutes(app) {
   internalApiRoutes(app);
   logRoutes(app);
   accessControlRoutes(app);
+  webhookRoutes(app);
 }
 
 module.exports = { registerRoutes };

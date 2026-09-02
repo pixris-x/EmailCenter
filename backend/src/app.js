@@ -1,6 +1,7 @@
 const Fastify = require('fastify');
 const cors = require('@fastify/cors');
 const multipart = require('@fastify/multipart');
+const { Readable } = require('node:stream');
 const { createLoggerOptions } = require('./config/logger');
 const { registerErrorHandler } = require('./plugins/error-handler');
 const { registerRoutes } = require('./routes');
@@ -13,7 +14,8 @@ const { serializeAdminUser } = require('./services/permission-service');
 function isPublicRequest(url = '') {
   return url.startsWith('/health')
     || url === '/auth/login'
-    || url.startsWith('/internal-api');
+    || url.startsWith('/internal-api')
+    || url.startsWith('/webhooks');
 }
 
 // 每次请求都从数据库取当前管理员，保证状态与角色权限即时生效。
@@ -43,7 +45,7 @@ async function attachCurrentAdmin(request, reply) {
     }
 
     request.currentAdmin = serializeAdminUser(adminUser);
-  } catch (error) {
+  } catch {
     return reply.status(401).send({ message: '登录状态已失效，请重新登录。' });
   }
 }
@@ -51,6 +53,8 @@ async function attachCurrentAdmin(request, reply) {
 function buildApp() {
   const app = Fastify({
     logger: createLoggerOptions(),
+    // 生产环境经 Nginx 反代，开启后 request.ip 取真实客户端 IP（用于登录防爆破）。
+    trustProxy: true,
   });
 
   app.decorateRequest('currentAdmin', null);
@@ -68,6 +72,22 @@ function buildApp() {
   });
 
   app.addHook('onRequest', attachCurrentAdmin);
+
+  // Webhook 需要原始请求体做签名校验，同时保留给 fastify 正常 JSON 解析。
+  app.addHook('preParsing', (request, reply, payload, done) => {
+    if (!request.url || !request.url.startsWith('/webhooks/resend')) {
+      return done(null, payload);
+    }
+
+    const chunks = [];
+    payload.on('data', (chunk) => chunks.push(chunk));
+    payload.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8');
+      request.rawBody = raw;
+      done(null, Readable.from([Buffer.from(raw)]));
+    });
+    payload.on('error', done);
+  });
 
   registerErrorHandler(app);
   registerRoutes(app);

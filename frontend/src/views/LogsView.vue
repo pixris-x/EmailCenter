@@ -20,6 +20,17 @@
           <strong>{{ job.sendRequest?.requestNo || job.id }}</strong>
           <span>{{ statusLabelMap[job.status] || job.status }} · {{ job.provider }}</span>
           <p>{{ job.sendRequest?.template?.name || '未知模板' }} · {{ job.sendRequest?.sourceProject || 'manual' }}</p>
+          <div v-if="job.status === 'failed'" class="list-card__actions" @click.stop>
+            <el-button
+              link
+              type="primary"
+              size="small"
+              :loading="retryingJobId === job.id"
+              @click="retryJob(job)"
+            >
+              重试
+            </el-button>
+          </div>
         </article>
         <el-empty v-if="!emailJobs.length && !jobListLoading" description="暂无邮件任务日志" />
       </div>
@@ -118,7 +129,19 @@
               <p>{{ log.message }}</p>
             </article>
           </div>
-          <el-empty v-else description="该任务暂无事件日志" />
+
+          <div class="list-stack" v-if="selectedJob.feedbackEvents?.length">
+            <div class="panel-card__header">
+              <div>
+                <strong>回执事件</strong>
+              </div>
+            </div>
+            <article v-for="event in selectedJob.feedbackEvents" :key="event.id" class="list-card">
+              <strong>{{ feedbackKindLabelMap[event.kind] || event.kind }}</strong>
+              <span>{{ event.statusCode || '—' }} · {{ formatDateTime(event.receivedAt) }}</span>
+              <p>{{ event.reason || '无原因' }}</p>
+            </article>
+          </div>
         </template>
       </div>
     </el-drawer>
@@ -127,12 +150,14 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import api from '../lib/api'
 
 const jobListLoading = ref(false)
 const reviewListLoading = ref(false)
 const auditListLoading = ref(false)
 const jobDetailLoading = ref(false)
+const retryingJobId = ref('')
 const emailJobs = ref([])
 const reviewLogs = ref([])
 const auditLogs = ref([])
@@ -160,6 +185,8 @@ const statusLabelMap = {
   processing: '发送中',
   sent: '已发送',
   failed: '失败',
+  bounced: '已退信',
+  delivered: '已送达',
 }
 
 const deliveryLabelMap = {
@@ -168,6 +195,17 @@ const deliveryLabelMap = {
   processing: '发送中',
   sent: '已发送',
   failed: '发送失败',
+  bounced: '已退信',
+  delivered: '已送达',
+}
+
+const feedbackKindLabelMap = {
+  bounce: '退信',
+  complaint: '投诉',
+  delivered: '已送达',
+  sent: '已发送',
+  opened: '已打开',
+  clicked: '已点击',
 }
 
 const reviewTypeLabelMap = {
@@ -280,6 +318,23 @@ async function loadAll() {
     loadReviewLogs(reviewPagination.page),
     loadAuditLogs(auditPagination.page),
   ])
+}
+
+async function retryJob(job) {
+  retryingJobId.value = job.id
+  try {
+    const { data } = await api.post(`/queue/jobs/${job.id}/retry`)
+    ElMessage.success(data.message || '邮件任务已重新入队。')
+    if (jobDrawerVisible.value && selectedJobId.value === job.id) {
+      selectedJob.value = null
+      jobDrawerVisible.value = false
+    }
+    await loadEmailJobs(jobPagination.page)
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || error.message)
+  } finally {
+    retryingJobId.value = ''
+  }
 }
 
 async function handleJobPageChange(page) {
