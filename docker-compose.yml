@@ -1,44 +1,29 @@
 # ============================================================
 # Email Center
 #
-# 统一使用服务器现有基础设施：
+# 复用服务器现有：
+# PostgreSQL 18 → postgres.db.pixris.com:5432
+# Redis         → redis.db.pixris.com:6379
 #
-# PostgreSQL:
-#   postgres.db.pixris.com:5432
-#
-# Redis:
-#   redis.db.pixris.com:6379
-#
-# 宝塔通过 web Docker 网络反代：
-#
-# Web:
-#   emailcenter.web.pixris.com:80
-#
-# API:
-#   emailcenter-api.web.pixris.com:4121
+# 宝塔通过 web 网络访问：
+# Web → emailcenter.web.pixris.com:80
+# API → emailcenter-api.web.pixris.com:4121
 # ============================================================
 
-
-# API / Worker / Migrate 共用构建配置
 x-api-build: &api-build
   context: .
   dockerfile: docker/api.Dockerfile
 
-
-# API / Worker / Migrate 共用运行配置
 x-api-env: &api-env
   APP_ENV: production
-
   APP_HOST: 0.0.0.0
   APP_PORT: 4121
 
   APP_ATTACHMENT_DIR: /app/storage/attachments
 
-  # 使用服务器现有 PostgreSQL
   DB_HOST: postgres.db.pixris.com
   DB_PORT: 5432
 
-  # 使用服务器现有 Redis
   REDIS_HOST: redis.db.pixris.com
   REDIS_PORT: 6379
 
@@ -50,10 +35,8 @@ services:
   # ==========================================================
   migrate:
     build: *api-build
-
     image: emailcenter-api:latest
     container_name: emailcenter-migrate
-
     restart: "no"
 
     env_file:
@@ -66,7 +49,6 @@ services:
       - node
       - scripts/migrate.js
 
-    # 迁移只需要访问数据库网络
     networks:
       - database
 
@@ -76,10 +58,8 @@ services:
   # ==========================================================
   api:
     build: *api-build
-
     image: emailcenter-api:latest
     container_name: emailcenter-api
-
     restart: unless-stopped
 
     env_file:
@@ -88,8 +68,6 @@ services:
     environment:
       <<: *api-env
 
-    # 不再映射宿主机端口
-    # 通过 web Docker 网络让宝塔直接访问
     expose:
       - "4121"
 
@@ -114,13 +92,10 @@ services:
         condition: service_completed_successfully
 
     networks:
-
-      # 宝塔反向代理网络
       web:
         aliases:
           - emailcenter-api.web.pixris.com
 
-      # PostgreSQL / Redis 网络
       database:
 
 
@@ -129,10 +104,8 @@ services:
   # ==========================================================
   worker:
     build: *api-build
-
     image: emailcenter-api:latest
     container_name: emailcenter-worker
-
     restart: unless-stopped
 
     env_file:
@@ -152,8 +125,6 @@ services:
       migrate:
         condition: service_completed_successfully
 
-    # Worker 不对外提供 HTTP
-    # 所以只加入数据库网络即可
     networks:
       - database
 
@@ -168,11 +139,8 @@ services:
 
     image: emailcenter-web:latest
     container_name: emailcenter-web
-
     restart: unless-stopped
 
-    # 不再映射宿主机 3121
-    # 宝塔直接走 Docker web 网络
     expose:
       - "80"
 
@@ -189,23 +157,19 @@ services:
       retries: 3
       start_period: 10s
 
+    depends_on:
+      api:
+        condition: service_started
+
     networks:
       web:
         aliases:
           - emailcenter.web.pixris.com
 
 
-# ============================================================
-# 持久化
-# ============================================================
-
 volumes:
   attachment_data:
 
-
-# ============================================================
-# 使用服务器已经创建好的公共网络
-# ============================================================
 
 networks:
 
