@@ -31,6 +31,7 @@ tmp/
 Thumbs.db
 .idea/
 .vscode/
+.workbuddy/
 
 # local uploads and generated files
 uploads/

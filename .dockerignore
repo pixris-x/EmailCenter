@@ -1,0 +1,15 @@
+# 构建上下文裁剪：只保留镜像构建需要的源码与配置
+.git
+node_modules
+**/node_modules
+frontend/dist
+backend/logs
+backend/storage
+tmp
+docs
+scripts
+logs
+.env
+*.log
+*.crt
+*.key
